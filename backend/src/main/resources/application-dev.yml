@@ -1,9 +1,9 @@
 spring:
   # ── DataSource (local dev — PostgreSQL) ────────────────────────────────────
   datasource:
-    url: jdbc:postgresql://localhost:5432/bookstore_dev
-    username: bookstore
-    password: bookstore
+    url: jdbc:postgresql://localhost:5432/bookstore
+    username: postgres
+    password: postgres123
 
   # ── JPA ────────────────────────────────────────────────────────────────────
   jpa:
