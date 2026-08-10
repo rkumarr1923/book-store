@@ -57,7 +57,9 @@ public class SecurityConfig {
             // Health check
             "/api/v1/health",
             // Authentication
-            "/api/v1/auth/**"
+            "/api/v1/auth/**",
+            // Contact Us form (public — no login required)
+            "/api/v1/contact"
     };
 
     /** Public read-only catalogue endpoints (GET only). */

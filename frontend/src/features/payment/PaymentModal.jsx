@@ -20,21 +20,63 @@ import LockIcon from '@mui/icons-material/Lock';
 
 import { paymentApi } from '../../common/api/paymentApi';
 import { formatCurrency } from '../../common/utils/formatCurrency';
+import { useToast } from '../../common/context/ToastContext';
 
 // ─── Credit / Debit Card Form ─────────────────────────────────────────────────
 
 function CardForm({ form, setForm, errors }) {
   const set = (k) => (e) => { setForm((f) => ({ ...f, [k]: e.target.value })); };
+
+  const handleCardNumber = (e) => {
+    // Strip everything except digits, limit to 16 digits, then insert dashes every 4
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 16);
+    const formatted = digits.replace(/(.{4})/g, '$1-').replace(/-$/, '');
+    setForm((f) => ({ ...f, cardNumber: formatted }));
+  };
+
+  const handleCvv = (e) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 3);
+    setForm((f) => ({ ...f, cvv: digits }));
+  };
+
+  const handleExpiry = (e) => {
+    // Strip non-digits, cap at 6 (MMYYYY)
+    let digits = e.target.value.replace(/\D/g, '').slice(0, 6);
+
+    // Clamp first digit: can only be 0 or 1
+    if (digits.length >= 1 && digits[0] > '1') digits = '0' + digits.slice(0, 1) + digits.slice(1);
+
+    // Clamp month to 01–12: once 2 digits typed, ensure value <= 12
+    if (digits.length >= 2) {
+      const mm = parseInt(digits.slice(0, 2), 10);
+      if (mm < 1)  digits = '01' + digits.slice(2);
+      if (mm > 12) digits = '12' + digits.slice(2);
+    }
+
+    // Clamp year: once 4 year digits present, ensure >= current year
+    if (digits.length === 6) {
+      const currentYear = new Date().getFullYear();
+      const yyyy = parseInt(digits.slice(2), 10);
+      if (yyyy < currentYear) digits = digits.slice(0, 2) + String(currentYear);
+    }
+
+    // Auto-insert slash after MM
+    const formatted = digits.length > 2
+      ? digits.slice(0, 2) + '/' + digits.slice(2)
+      : digits;
+    setForm((f) => ({ ...f, expiryDate: formatted }));
+  };
+
   return (
     <Box display="grid" gridTemplateColumns="1fr 1fr" gap={1.5}>
       <TextField
         label="Card Number"
         placeholder="XXXX-XXXX-XXXX-XXXX"
         value={form.cardNumber}
-        onChange={set('cardNumber')}
+        onChange={handleCardNumber}
         error={!!errors.cardNumber}
         helperText={errors.cardNumber}
-        inputProps={{ maxLength: 19 }}
+        inputProps={{ maxLength: 19, inputMode: 'numeric' }}
         sx={{ gridColumn: '1 / -1' }}
         size="small"
       />
@@ -51,20 +93,20 @@ function CardForm({ form, setForm, errors }) {
         label="CVV"
         placeholder="XXX"
         value={form.cvv}
-        onChange={set('cvv')}
+        onChange={handleCvv}
         error={!!errors.cvv}
         helperText={errors.cvv}
-        inputProps={{ maxLength: 4 }}
+        inputProps={{ maxLength: 3, inputMode: 'numeric' }}
         size="small"
       />
       <TextField
         label="Date of Expiry"
         placeholder="MM/YYYY"
         value={form.expiryDate}
-        onChange={set('expiryDate')}
+        onChange={handleExpiry}
         error={!!errors.expiryDate}
         helperText={errors.expiryDate}
-        inputProps={{ maxLength: 7 }}
+        inputProps={{ maxLength: 7, inputMode: 'numeric' }}
         size="small"
         sx={{ gridColumn: '1 / -1' }}
       />
@@ -140,10 +182,16 @@ function PaymentModal({ open, onClose, order, onSuccess }) {
 
   const amount = order?.totalAmount || 0;
 
+  const toast = useToast();
+
   const mutation = useMutation({
     mutationFn: (payload) => paymentApi.processPayment(payload),
     onSuccess: (data) => onSuccess(data.data),
-    onError: (err) => setApiError(err.response?.data?.message || 'Payment failed. Please try again.'),
+    onError: (err) => {
+      const msg = err.response?.data?.message || 'Payment failed. Please try again.';
+      setApiError(msg);
+      toast.error(msg, 'Payment Declined');
+    },
   });
 
   const validateAndSubmit = () => {
@@ -152,14 +200,23 @@ function PaymentModal({ open, onClose, order, onSuccess }) {
 
     if (method === 'CREDIT_CARD' || method === 'DEBIT_CARD') {
       const e = {};
-      if (!cardForm.cardNumber.replace(/\s/g, '').match(/^\d{13,19}$/)) e.cardNumber = 'Enter a valid card number';
+      if (!cardForm.cardNumber.replace(/-/g, '').match(/^\d{16}$/)) e.cardNumber = 'Enter a valid 16-digit card number';
       if (!cardForm.nameOnCard.trim()) e.nameOnCard = 'Required';
-      if (!cardForm.cvv.match(/^\d{3,4}$/)) e.cvv = 'Enter 3 or 4 digit CVV';
-      if (!cardForm.expiryDate.match(/^(0[1-9]|1[0-2])\/\d{4}$/)) e.expiryDate = 'Format: MM/YYYY';
+      if (!cardForm.cvv.match(/^\d{3}$/)) e.cvv = 'Enter a 3-digit CVV';
+      if (!cardForm.expiryDate.match(/^(0[1-9]|1[0-2])\/\d{4}$/)) {
+        e.expiryDate = 'Format: MM/YYYY';
+      } else {
+        const [mm, yyyy] = cardForm.expiryDate.split('/');
+        const expiry = new Date(Number(yyyy), Number(mm) - 1, 1);
+        const today = new Date();
+        if (expiry < new Date(today.getFullYear(), today.getMonth(), 1)) {
+          e.expiryDate = 'Card has expired';
+        }
+      }
       if (Object.keys(e).length) { setCardErrors(e); return; }
       setCardErrors({});
       payload.cardDetails = {
-        cardNumber: cardForm.cardNumber.replace(/\s/g, ''),
+        cardNumber: cardForm.cardNumber.replace(/-/g, ''),
         nameOnCard: cardForm.nameOnCard,
         cvv: cardForm.cvv,
         expiryDate: cardForm.expiryDate,
@@ -195,6 +252,11 @@ function PaymentModal({ open, onClose, order, onSuccess }) {
       </IconButton>
 
       <DialogContent sx={{ pt: 3, pb: 3 }}>
+        {/* Demo Notice Banner */}
+        <Alert severity="info" sx={{ mb: 2, bgcolor: 'rgba(2, 136, 209, 0.12)', border: '1px solid rgba(2, 136, 209, 0.3)' }}>
+          <strong>DEMO / MOCK PAYMENT:</strong> No real money will be charged. Enter any test credentials (e.g. CVV 000 to test failure).
+        </Alert>
+
         {/* Header */}
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2.5}>
           <Typography variant="h6" fontWeight={700}>

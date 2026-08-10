@@ -1,6 +1,7 @@
 package com.bookstore.service;
 
 import com.bookstore.domain.User;
+import com.bookstore.dto.request.ContactRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -67,6 +68,35 @@ public class EmailService {
         }
     }
 
+    // ── Contact Email ─────────────────────────────────────────────────────────
+
+    /**
+     * Forwards a Contact Us form submission to the site owner's inbox.
+     * Fire-and-forget — runs on a background thread so the HTTP response is immediate.
+     *
+     * @param req the validated contact form payload
+     */
+    public void sendContactEmail(ContactRequest req) {
+        if (mailUsername == null || mailUsername.isBlank()) {
+            log.debug("Email not configured — skipping contact email from '{}'", req.getEmail());
+            return;
+        }
+        try {
+            String to      = "teambookstore@gmail.com";
+            String subject = "[BookStore Contact] " +
+                    (req.getSubject() != null && !req.getSubject().isBlank()
+                            ? req.getSubject().trim()
+                            : "(no subject)");
+            String body    = buildContactHtml(req);
+            sendHtmlEmail(mailUsername, to, subject, body);
+            log.info("Contact email forwarded from '{}' to '{}'", req.getEmail(), to);
+        } catch (Exception ex) {
+            log.warn("Failed to send contact email from '{}': {}", req.getEmail(), ex.getMessage());
+            // Re-throw so the controller can return a 500 to the client instead of false-success
+            throw new RuntimeException("Failed to deliver contact message. Please try again later.", ex);
+        }
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private void sendHtmlEmail(String from, String to, String subject, String htmlBody)
@@ -78,6 +108,109 @@ public class EmailService {
         helper.setSubject(subject);
         helper.setText(htmlBody, true);
         mailSender.send(message);
+    }
+
+    private String buildContactHtml(ContactRequest req) {
+        int year = Year.now().getValue();
+        String safeSubject = (req.getSubject() != null && !req.getSubject().isBlank())
+                ? escapeHtml(req.getSubject().trim()) : "<em style=\"color:#9e9e9e\">No subject</em>";
+        return """
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                  <meta charset="UTF-8" />
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                  <title>BookStore — Contact Message</title>
+                </head>
+                <body style="margin:0;padding:0;background:#0f0f0f;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+                  <table width="100%%" cellpadding="0" cellspacing="0" style="background:#0f0f0f;padding:40px 0;">
+                    <tr>
+                      <td align="center">
+                        <table width="600" cellpadding="0" cellspacing="0"
+                               style="background:#1e1e1e;border-radius:12px;overflow:hidden;
+                                      border:1px solid rgba(255,255,255,0.08);">
+
+                          <!-- Header -->
+                          <tr>
+                            <td style="background:linear-gradient(135deg,#1565c0 0%%,#0d47a1 100%%);
+                                        padding:28px 40px;text-align:center;">
+                              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;">
+                                📚 BookStore — New Contact Message
+                              </h1>
+                            </td>
+                          </tr>
+
+                          <!-- Body -->
+                          <tr>
+                            <td style="padding:32px 40px;">
+
+                              <!-- Meta -->
+                              <table width="100%%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                                <tr>
+                                  <td style="padding:10px 14px;background:#252525;border-radius:8px;
+                                              border-left:3px solid #2979ff;margin-bottom:8px;">
+                                    <p style="margin:0;color:#9e9e9e;font-size:12px;text-transform:uppercase;
+                                               letter-spacing:0.5px;">From</p>
+                                    <p style="margin:4px 0 0;color:#e0e0e0;font-size:15px;font-weight:600;">
+                                      %s &lt;%s&gt;
+                                    </p>
+                                  </td>
+                                </tr>
+                                <tr><td style="height:8px;"></td></tr>
+                                <tr>
+                                  <td style="padding:10px 14px;background:#252525;border-radius:8px;
+                                              border-left:3px solid #2979ff;">
+                                    <p style="margin:0;color:#9e9e9e;font-size:12px;text-transform:uppercase;
+                                               letter-spacing:0.5px;">Subject</p>
+                                    <p style="margin:4px 0 0;color:#e0e0e0;font-size:15px;">%s</p>
+                                  </td>
+                                </tr>
+                              </table>
+
+                              <!-- Message -->
+                              <p style="margin:0 0 8px;color:#9e9e9e;font-size:12px;
+                                         text-transform:uppercase;letter-spacing:0.5px;">Message</p>
+                              <div style="background:#252525;border-radius:8px;padding:16px 20px;
+                                           border:1px solid rgba(255,255,255,0.06);">
+                                <p style="margin:0;color:#e0e0e0;font-size:15px;line-height:1.75;
+                                           white-space:pre-wrap;">%s</p>
+                              </div>
+
+                            </td>
+                          </tr>
+
+                          <!-- Footer -->
+                          <tr>
+                            <td style="background:#161616;padding:16px 40px;text-align:center;
+                                        border-top:1px solid rgba(255,255,255,0.06);">
+                              <p style="margin:0;color:#424242;font-size:12px;">
+                                Sent from the BookStore Contact Us form &nbsp;·&nbsp; © %d Ramkumar K.
+                              </p>
+                            </td>
+                          </tr>
+
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </body>
+                </html>
+                """.formatted(
+                        escapeHtml(req.getName().trim()),
+                        escapeHtml(req.getEmail().trim()),
+                        safeSubject,
+                        escapeHtml(req.getMessage().trim()),
+                        year);
+    }
+
+    /** Minimal HTML escaping to prevent injection in email bodies. */
+    private String escapeHtml(String input) {
+        if (input == null) return "";
+        return input
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;");
     }
 
     private String buildWelcomeHtml(String firstName) {

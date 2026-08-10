@@ -59,8 +59,9 @@ public class OrderService {
             orderPage = orderRepository.findByUserIdAndStatusOrderByPlacedAtDesc(
                     userId, orderStatus, PageRequest.of(page, size));
         } else {
-            orderPage = orderRepository.findByUserIdOrderByPlacedAtDesc(
-                    userId, PageRequest.of(page, size));
+            // Default My Orders view: exclude unconfirmed draft orders (status = PLACED)
+            orderPage = orderRepository.findByUserIdAndStatusNotOrderByPlacedAtDesc(
+                    userId, OrderStatus.PLACED, PageRequest.of(page, size));
         }
 
         List<OrderSummaryResponse> content = orderPage.getContent().stream()

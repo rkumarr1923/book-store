@@ -137,12 +137,26 @@ public class PaymentService {
 
     private void validatePaymentRequest(PaymentRequest request) {
         PaymentMethod method = request.getPaymentMethod();
-        if ((method == PaymentMethod.CREDIT_CARD || method == PaymentMethod.DEBIT_CARD)
-                && request.getCardDetails() == null) {
-            throw new BadRequestException("Card details are required for " + method + " payment.");
+        if ((method == PaymentMethod.CREDIT_CARD || method == PaymentMethod.DEBIT_CARD)) {
+            if (request.getCardDetails() == null) {
+                throw new BadRequestException("Card details are required for " + method + " payment.");
+            }
+            // Demo failure simulation hooks (e.g. CVV '000' or Card ending in '0000')
+            String cardNum = request.getCardDetails().getCardNumber();
+            String cvv = request.getCardDetails().getCvv();
+            if ("000".equals(cvv) || (cardNum != null && cardNum.endsWith("0000"))) {
+                throw new BusinessRuleException("Payment Declined: Demo card authorization failed or insufficient funds.");
+            }
         }
-        if (method == PaymentMethod.UPI && request.getUpiDetails() == null) {
-            throw new BadRequestException("UPI details are required for UPI payment.");
+        if (method == PaymentMethod.UPI) {
+            if (request.getUpiDetails() == null) {
+                throw new BadRequestException("UPI details are required for UPI payment.");
+            }
+            // Demo failure simulation hook (e.g. fail@upi or decline@upi)
+            String upiId = request.getUpiDetails().getUpiId();
+            if (upiId != null && (upiId.toLowerCase().startsWith("fail") || upiId.toLowerCase().startsWith("decline"))) {
+                throw new BusinessRuleException("UPI Payment Failed: Transaction rejected by bank/UPI gateway.");
+            }
         }
     }
 

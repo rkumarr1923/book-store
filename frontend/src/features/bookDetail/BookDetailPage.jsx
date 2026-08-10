@@ -263,7 +263,10 @@ function BookDetailPage() {
 
   const wishlistMutation = useMutation({
     mutationFn: () => wishlistApi.addToWishlist({ bookId: Number(bookId) }),
-    onSuccess: () => toast.success('Added to wishlist!'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.WISHLIST });
+      toast.success('Added to wishlist!');
+    },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to add to wishlist.'),
   });
 

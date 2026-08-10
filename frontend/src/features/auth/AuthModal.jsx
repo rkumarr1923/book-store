@@ -20,7 +20,7 @@ import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useAuth } from '../../common/hooks/useAuth';
 import { useToast } from '../../common/context/ToastContext';
-import { isValidEmail, isValidPassword } from '../../common/utils/validators';
+import { isValidEmail, isValidPassword, isValidPhone } from '../../common/utils/validators';
 
 // ─── Sub-views ────────────────────────────────────────────────────────────────
 
@@ -168,7 +168,9 @@ function RegisterView({ onSwitch, onClose }) {
   const [apiError, setApiError] = useState('');
 
   const set = (k) => (e) => {
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+    let val = e.target.value;
+    if (k === 'phoneNumber') val = val.replace(/\D/g, '').slice(0, 10);
+    setForm((f) => ({ ...f, [k]: val }));
     setErrors((er) => ({ ...er, [k]: '' }));
   };
 
@@ -178,6 +180,8 @@ function RegisterView({ onSwitch, onClose }) {
     if (!form.lastName.trim()) e.lastName = 'Last name is required';
     if (!form.email.trim()) e.email = 'Email is required';
     else if (!isValidEmail(form.email)) e.email = 'Enter a valid email address';
+    if (form.phoneNumber.trim() && !isValidPhone(form.phoneNumber.trim()))
+      e.phoneNumber = 'Must start with 6, 7, 8, or 9 (10 digits)';
     if (!form.password) e.password = 'Password is required';
     else if (!isValidPassword(form.password))
       e.password = 'Min 8 chars, one uppercase, one number, one special character';
@@ -195,7 +199,8 @@ function RegisterView({ onSwitch, onClose }) {
       firstName: form.firstName.trim(),
       lastName: form.lastName.trim(),
       email: form.email.trim(),
-      phoneNumber: form.phoneNumber.trim() || undefined,
+      // Backend expects +91 prefix; omit entirely if blank
+      phoneNumber: form.phoneNumber.trim() ? `+91${form.phoneNumber.trim()}` : undefined,
       password: form.password,
     };
     const res = await register(payload);
@@ -258,9 +263,16 @@ function RegisterView({ onSwitch, onClose }) {
       <TextField
         fullWidth
         label="Phone Number (optional)"
-        placeholder="+91XXXXXXXXXX"
         value={form.phoneNumber}
         onChange={set('phoneNumber')}
+        error={!!errors.phoneNumber}
+        helperText={errors.phoneNumber}
+        inputProps={{ maxLength: 10, inputMode: 'numeric' }}
+        InputProps={{
+          startAdornment: (
+            <Typography variant="body2" sx={{ mr: 0.5, color: 'text.secondary' }}>+91</Typography>
+          ),
+        }}
         sx={{ mb: 1.5 }}
       />
       <TextField

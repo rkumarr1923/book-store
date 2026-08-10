@@ -27,6 +27,7 @@ import { userApi } from '../../common/api/userApi';
 import { QUERY_KEYS } from '../../common/constants/queryKeys';
 import { formatCurrency } from '../../common/utils/formatCurrency';
 import { formatDeliveryDate } from '../../common/utils/formatDate';
+import { validateAddressForm } from '../../common/utils/validators';
 import { buildRoute, ROUTES } from '../../common/constants/routes';
 import LoadingSpinner from '../../common/components/LoadingSpinner/LoadingSpinner';
 import EmptyState from '../../common/components/EmptyState/EmptyState';
@@ -37,6 +38,88 @@ import { useToast } from '../../common/context/ToastContext';
 import PaymentModal from '../payment/PaymentModal';
 
 const FORMAT_LABELS = { PAPERBACK: 'Paperback', HARDCOVER: 'Hard Cover', EBOOK: 'eBook' };
+
+// ─── Available Offers ─────────────────────────────────────────────────────────
+
+const AVAILABLE_OFFERS = [
+  { code: 'SAVE100',   label: '₹100 OFF',  description: 'Min. order ₹500',  minOrder: 500  },
+  { code: 'WELCOME20', label: '20% OFF',   description: 'Min. order ₹200',  minOrder: 200  },
+  { code: 'BOOKFEST',  label: '₹200 OFF',  description: 'Min. order ₹800',  minOrder: 800  },
+  { code: 'SUMMER50',  label: '₹50 OFF',   description: 'No minimum order', minOrder: 0    },
+];
+
+function AvailableOffers({ subtotal, onApply, onRemove, couponApplied, appliedCode }) {
+  return (
+    <Box mb={2}>
+      <Typography variant="body2" fontWeight={700} mb={1.5} color="text.primary">
+        Available Offers
+      </Typography>
+      <Stack spacing={1}>
+        {AVAILABLE_OFFERS.map((offer) => {
+          const isApplied = couponApplied && appliedCode === offer.code;
+          return (
+            <Box
+              key={offer.code}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                border: '1px dashed',
+                borderColor: isApplied ? 'success.main' : 'divider',
+                borderRadius: 1.5,
+                px: 1.5,
+                py: 1,
+                bgcolor: isApplied ? 'rgba(46,125,50,0.06)' : 'background.default',
+              }}
+            >
+              <LocalOfferIcon
+                sx={{ fontSize: 16, color: isApplied ? 'success.main' : 'primary.main', flexShrink: 0 }}
+              />
+              <Box flex={1} minWidth={0}>
+                <Typography
+                  variant="caption"
+                  fontWeight={700}
+                  sx={{
+                    fontFamily: 'monospace',
+                    letterSpacing: 0.5,
+                    color: isApplied ? 'success.main' : 'text.primary',
+                  }}
+                >
+                  {offer.code}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" noWrap>
+                  {offer.label} · {offer.description}
+                </Typography>
+              </Box>
+              {isApplied ? (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  onClick={onRemove}
+                  sx={{ flexShrink: 0, fontSize: 11, py: 0.4, px: 1.2, minWidth: 54 }}
+                >
+                  Remove
+                </Button>
+              ) : (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  disabled={couponApplied}
+                  onClick={() => onApply(offer.code)}
+                  sx={{ flexShrink: 0, fontSize: 11, py: 0.4, px: 1.2, minWidth: 54 }}
+                >
+                  Apply
+                </Button>
+              )}
+            </Box>
+          );
+        })}
+      </Stack>
+    </Box>
+  );
+}
 
 // ─── Cart Item Row ────────────────────────────────────────────────────────────
 
@@ -189,26 +272,27 @@ function AddressForm({ value, onChange, errors = {}, onErrorClear }) {
   );
 }
 
+// Delegate to the shared validator so rules stay consistent app-wide
 function validateAddress(addr) {
-  const e = {};
-  if (!addr.firstName?.trim()) e.firstName = 'Required';
-  if (!addr.lastName?.trim()) e.lastName = 'Required';
-  if (!addr.addressLine1?.trim()) e.addressLine1 = 'Required';
-  if (!addr.city?.trim()) e.city = 'Required';
-  if (!addr.state?.trim()) e.state = 'Required';
-  if (!addr.pinCode?.trim()) e.pinCode = 'Required';
-  else if (!/^\d{6}$/.test(addr.pinCode)) e.pinCode = 'Must be 6 digits';
-  if (!addr.email?.trim()) e.email = 'Required';
-  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr.email)) e.email = 'Invalid email';
-  if (!addr.phoneNumber?.trim()) e.phoneNumber = 'Required';
-  else if (!/^\d{10}$/.test(addr.phoneNumber)) e.phoneNumber = 'Must be exactly 10 digits';
-  return e;
+  return validateAddressForm(addr);
 }
 
 // ─── Grand Total Panel ────────────────────────────────────────────────────────
 
-function GrandTotalPanel({ summary, coupon, setCoupon, onApplyCoupon, couponLoading, couponError, couponApplied, onPayNow, payLoading }) {
+function GrandTotalPanel({ summary, coupon, setCoupon, onApplyCoupon, onRemoveCoupon, couponLoading, couponError, couponApplied, onPayNow, payLoading }) {
   const [couponInput, setCouponInput] = useState(coupon);
+
+  // When an offer card's Apply is clicked, fill the input and submit
+  const handleOfferApply = (code) => {
+    setCouponInput(code);
+    setCoupon(code);
+    onApplyCoupon(code);
+  };
+
+  // Sync input when coupon is cleared externally
+  React.useEffect(() => {
+    if (!coupon) setCouponInput('');
+  }, [coupon]);
 
   return (
     <Box
@@ -258,7 +342,16 @@ function GrandTotalPanel({ summary, coupon, setCoupon, onApplyCoupon, couponLoad
           </Box>
         </Stack>
 
-        {/* Coupon */}
+        {/* Available Offers */}
+        <AvailableOffers
+          subtotal={summary?.subtotal || 0}
+          onApply={handleOfferApply}
+          onRemove={onRemoveCoupon}
+          couponApplied={couponApplied}
+          appliedCode={coupon}
+        />
+
+        {/* Coupon input */}
         <Box display="flex" gap={1} mb={1}>
           <TextField
             size="small"
@@ -269,15 +362,27 @@ function GrandTotalPanel({ summary, coupon, setCoupon, onApplyCoupon, couponLoad
             inputProps={{ style: { textTransform: 'uppercase' } }}
             disabled={couponApplied}
           />
-          <Button
-            variant="contained"
-            size="small"
-            onClick={() => { setCoupon(couponInput); onApplyCoupon(couponInput); }}
-            disabled={couponLoading || !couponInput.trim() || couponApplied}
-            sx={{ whiteSpace: 'nowrap' }}
-          >
-            {couponLoading ? <CircularProgress size={14} color="inherit" /> : couponApplied ? 'Applied' : 'Apply'}
-          </Button>
+          {couponApplied ? (
+            <Button
+              variant="outlined"
+              color="error"
+              size="small"
+              onClick={onRemoveCoupon}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              Remove
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              size="small"
+              onClick={() => { setCoupon(couponInput); onApplyCoupon(couponInput); }}
+              disabled={couponLoading || !couponInput.trim()}
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              {couponLoading ? <CircularProgress size={14} color="inherit" /> : 'Apply'}
+            </Button>
+          )}
         </Box>
         {couponError && <Typography variant="caption" color="error">{couponError}</Typography>}
 
@@ -408,6 +513,15 @@ function CheckoutPage() {
     onError: () => toast.error('Failed to remove item. Please try again.'),
   });
 
+  // Remove coupon
+  const handleRemoveCoupon = () => {
+    setCoupon('');
+    setCouponApplied(false);
+    setCouponError('');
+    setDiscount(0);
+    toast.info('Coupon removed.');
+  };
+
   // Apply coupon
   const handleApplyCoupon = async (code) => {
     if (!code?.trim()) return;
@@ -484,7 +598,20 @@ function CheckoutPage() {
       setPlacedOrder(res.data);
       setPaymentOpen(true);
     } catch (err) {
-      setPlaceError(err.response?.data?.message || 'Failed to place order. Please try again.');
+      const data = err.response?.data;
+      if (data?.fieldErrors && data.fieldErrors.length > 0) {
+        // Map backend field validation errors directly to the input fields
+        const mappedErrors = {};
+        data.fieldErrors.forEach((fe) => {
+          // Handle nested field names like 'deliveryAddress.phoneNumber'
+          const fieldKey = fe.field?.replace('deliveryAddress.', '') || fe.field;
+          mappedErrors[fieldKey] = fe.message;
+        });
+        setAddressErrors(mappedErrors);
+        setPlaceError('');
+      } else {
+        setPlaceError(data?.message || 'Failed to place order. Please try again.');
+      }
     }
   };
 
@@ -591,6 +718,7 @@ function CheckoutPage() {
             coupon={coupon}
             setCoupon={setCoupon}
             onApplyCoupon={handleApplyCoupon}
+            onRemoveCoupon={handleRemoveCoupon}
             couponLoading={couponLoading}
             couponError={couponError}
             couponApplied={couponApplied}

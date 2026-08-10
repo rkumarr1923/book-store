@@ -28,6 +28,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     /** Return paginated orders for a user, ordered by placement date descending. */
     Page<Order> findByUserIdOrderByPlacedAtDesc(Long userId, Pageable pageable);
 
+    /** Return paginated confirmed orders for a user (excluding unconfirmed PLACED drafts), ordered by placement date descending. */
+    Page<Order> findByUserIdAndStatusNotOrderByPlacedAtDesc(Long userId, OrderStatus status, Pageable pageable);
+
     // ── Single order lookup ───────────────────────────────────────────────────
 
     /** Find a specific order that belongs to the given user. Prevents cross-user access. */

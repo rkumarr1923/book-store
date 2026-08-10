@@ -28,6 +28,7 @@ import StarIcon from '@mui/icons-material/Star';
 import { userApi } from '../../common/api/userApi';
 import { useAuth } from '../../common/hooks/useAuth';
 import { useToast } from '../../common/context/ToastContext';
+import { validateAddressForm, validateProfileForm } from '../../common/utils/validators';
 import LoadingSpinner from '../../common/components/LoadingSpinner/LoadingSpinner';
 import ErrorMessage from '../../common/components/ErrorMessage/ErrorMessage';
 
@@ -43,31 +44,29 @@ function AddressDialog({ open, onClose, initial, onSave, saving }) {
   const [errors, setErrors] = useState({});
 
   React.useEffect(() => {
-    setForm(initial || EMPTY_ADDR);
+    const base = initial || EMPTY_ADDR;
+    setForm({
+      ...base,
+      phoneNumber: (base.phoneNumber || '').replace(/^\+91/, ''),
+    });
     setErrors({});
   }, [initial, open]);
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
-
-  const validate = () => {
-    const e = {};
-    if (!form.firstName?.trim()) e.firstName = 'Required';
-    if (!form.lastName?.trim()) e.lastName = 'Required';
-    if (!form.addressLine1?.trim()) e.addressLine1 = 'Required';
-    if (!form.city?.trim()) e.city = 'Required';
-    if (!form.state?.trim()) e.state = 'Required';
-    if (!form.pinCode?.trim()) e.pinCode = 'Required';
-    else if (!/^\d{6}$/.test(form.pinCode)) e.pinCode = '6 digits required';
-    if (!form.email?.trim()) e.email = 'Required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Invalid email';
-    if (!form.phoneNumber?.trim()) e.phoneNumber = 'Required';
-    return e;
+  const set = (k) => (e) => {
+    let val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (k === 'phoneNumber') val = val.replace(/\D/g, '').slice(0, 10);
+    if (k === 'pinCode')     val = val.replace(/\D/g, '').slice(0, 6);
+    setForm((f) => ({ ...f, [k]: val }));
+    setErrors((er) => ({ ...er, [k]: '' }));
   };
+
+  const validate = () => validateAddressForm(form);
 
   const handleSave = () => {
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
-    onSave(form);
+    // Backend expects phoneNumber with +91 prefix
+    onSave({ ...form, phoneNumber: `+91${form.phoneNumber}` });
   };
 
   return (
@@ -81,8 +80,19 @@ function AddressDialog({ open, onClose, initial, onSave, saving }) {
           <TextField label="Address Line 2 (optional)" value={form.addressLine2} onChange={set('addressLine2')} size="small" sx={{ gridColumn: '1 / -1' }} />
           <TextField label="Email" type="email" value={form.email} onChange={set('email')} error={!!errors.email} helperText={errors.email} size="small" />
           <TextField label="City" value={form.city} onChange={set('city')} error={!!errors.city} helperText={errors.city} size="small" />
-          <TextField label="PIN Code" value={form.pinCode} onChange={set('pinCode')} error={!!errors.pinCode} helperText={errors.pinCode} size="small" inputProps={{ maxLength: 6 }} />
-          <TextField label="Phone Number" value={form.phoneNumber} onChange={set('phoneNumber')} error={!!errors.phoneNumber} helperText={errors.phoneNumber} size="small" />
+          <TextField label="PIN Code" value={form.pinCode} onChange={set('pinCode')} error={!!errors.pinCode} helperText={errors.pinCode} size="small" inputProps={{ maxLength: 6, inputMode: 'numeric' }} />
+          <TextField
+            label="Phone Number"
+            value={form.phoneNumber}
+            onChange={set('phoneNumber')}
+            error={!!errors.phoneNumber}
+            helperText={errors.phoneNumber}
+            size="small"
+            inputProps={{ maxLength: 10, inputMode: 'numeric' }}
+            InputProps={{
+              startAdornment: <Typography variant="body2" sx={{ mr: 0.5, color: 'text.secondary' }}>+91</Typography>,
+            }}
+          />
           <TextField label="State" value={form.state} onChange={set('state')} error={!!errors.state} helperText={errors.state} size="small" />
           <TextField label="Country" value={form.country} onChange={set('country')} size="small" />
           <FormControlLabel
@@ -263,7 +273,7 @@ function ProfileTab() {
   const [form, setForm] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
-    phoneNumber: user?.phoneNumber || '',
+    phoneNumber: (user?.phoneNumber || '').replace(/^\+91/, ''),
   });
   const [errors, setErrors] = useState({});
 
@@ -276,14 +286,21 @@ function ProfileTab() {
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to update profile.'),
   });
 
-  const set = (k) => (e) => { setForm((f) => ({ ...f, [k]: e.target.value })); setErrors((er) => ({ ...er, [k]: '' })); };
+  const set = (k) => (e) => {
+    let val = e.target.value;
+    if (k === 'phoneNumber') val = val.replace(/\D/g, '').slice(0, 10);
+    setForm((f) => ({ ...f, [k]: val }));
+    setErrors((er) => ({ ...er, [k]: '' }));
+  };
 
   const handleSave = () => {
-    const e = {};
-    if (!form.firstName.trim()) e.firstName = 'Required';
-    if (!form.lastName.trim()) e.lastName = 'Required';
+    const e = validateProfileForm(form);
     if (Object.keys(e).length) { setErrors(e); return; }
-    mutation.mutate(form);
+    mutation.mutate({
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      phoneNumber: form.phoneNumber.trim() ? `+91${form.phoneNumber.trim()}` : undefined,
+    });
   };
 
   return (
@@ -316,11 +333,16 @@ function ProfileTab() {
           helperText="Email cannot be changed"
         />
         <TextField
-          label="Phone Number"
+          label="Phone Number (optional)"
           value={form.phoneNumber}
           onChange={set('phoneNumber')}
           size="small"
-          placeholder="+91XXXXXXXXXX"
+          error={!!errors.phoneNumber}
+          helperText={errors.phoneNumber || 'e.g. 9876543210'}
+          inputProps={{ maxLength: 10, inputMode: 'numeric' }}
+          InputProps={{
+            startAdornment: <Typography variant="body2" sx={{ mr: 0.5, color: 'text.secondary' }}>+91</Typography>,
+          }}
         />
       </Stack>
 

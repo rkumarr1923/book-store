@@ -51,7 +51,7 @@ public class WishlistService {
     /**
      * Return a paginated list of the user's wishlist items.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public PagedResponse<WishlistItemResponse> listWishlist(Long userId, int page, int size) {
         Wishlist wishlist = getOrCreateWishlist(userId);
         Page<WishlistItem> itemPage = wishlistItemRepository
