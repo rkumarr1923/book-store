@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -63,4 +64,23 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     /** Return paginated orders for a user filtered by status. */
     Page<Order> findByUserIdAndStatusOrderByPlacedAtDesc(Long userId, OrderStatus status,
                                                           Pageable pageable);
+
+    // ── Coupon usage tracking ─────────────────────────────────────────────────
+
+    /**
+     * Count how many times a user has successfully used a coupon.
+     * Only CONFIRMED, SHIPPED, and DELIVERED orders are counted —
+     * PLACED (awaiting payment) and CANCELLED orders are excluded.
+     * This is the source-of-truth for per-user coupon usage limits.
+     */
+    @Query("""
+            SELECT COUNT(o) FROM Order o
+            WHERE o.user.id  = :userId
+              AND o.coupon.id = :couponId
+              AND o.status IN :successStatuses
+            """)
+    long countSuccessfulCouponUsages(
+            @Param("userId")         Long userId,
+            @Param("couponId")       Long couponId,
+            @Param("successStatuses") List<OrderStatus> successStatuses);
 }

@@ -82,7 +82,7 @@ public class EmailService {
             return;
         }
         try {
-            String to      = "teambookstore@gmail.com";
+            String to      = "teambookstore26@gmail.com";
             String subject = "[BookStore Contact] " +
                     (req.getSubject() != null && !req.getSubject().isBlank()
                             ? req.getSubject().trim()

@@ -55,6 +55,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CheckoutService {
 
+    private static final List<OrderStatus> SUCCESSFUL_STATUSES =
+            List.of(OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.DELIVERED);
+
     private final CartService            cartService;
     private final CartRepository         cartRepository;
     private final CouponRepository       couponRepository;
@@ -89,7 +92,7 @@ public class CheckoutService {
         CouponSummaryResponse couponSummary = null;
 
         if (StringUtils.hasText(couponCode)) {
-            Coupon coupon = findValidCoupon(couponCode.trim(), subtotal);
+            Coupon coupon = findValidCoupon(userId, couponCode.trim(), subtotal);
             discountAmount = computeCouponDiscount(coupon, subtotal);
             couponSummary  = couponMapper.toSummaryResponse(coupon);
         }
@@ -121,7 +124,7 @@ public class CheckoutService {
         var cart       = cartService.getCart(userId);
         BigDecimal subtotal = cart.getSubtotal();
 
-        Coupon coupon = findValidCoupon(request.getCouponCode().trim(), subtotal);
+        Coupon coupon = findValidCoupon(userId, request.getCouponCode().trim(), subtotal);
         BigDecimal discountAmount = computeCouponDiscount(coupon, subtotal);
 
         ValidateCouponResponse base = couponMapper.toValidateResponse(coupon);
@@ -167,7 +170,7 @@ public class CheckoutService {
         Coupon     coupon         = null;
 
         if (StringUtils.hasText(request.getCouponCode())) {
-            coupon        = findValidCoupon(request.getCouponCode().trim(), subtotal);
+            coupon        = findValidCoupon(userId, request.getCouponCode().trim(), subtotal);
             discountAmount = computeCouponDiscount(coupon, subtotal);
         }
 
@@ -243,9 +246,13 @@ public class CheckoutService {
     // ── Private Helpers ────────────────────────────────────────────────────────
 
     /**
-     * Find a valid (active, unexpired, minimum-order-met) coupon by code.
+     * Find a valid coupon: active, unexpired, minimum-order-met, and within the
+     * per-user usage limit.
+     *
+     * <p>Usage is counted against CONFIRMED/SHIPPED/DELIVERED orders only —
+     * PLACED (payment pending) and CANCELLED orders do not consume the coupon.
      */
-    private Coupon findValidCoupon(String code, BigDecimal subtotal) {
+    private Coupon findValidCoupon(Long userId, String code, BigDecimal subtotal) {
         Coupon coupon = couponRepository.findByCodeAndIsActiveTrueAndExpiresAtAfter(
                         code, Instant.now())
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon", "code", code));
@@ -255,6 +262,20 @@ public class CheckoutService {
                     "Minimum order value of ₹" + coupon.getMinOrderValue()
                             + " required to apply this coupon.");
         }
+
+        // Per-user usage limit (0 = unlimited)
+        int limit = coupon.getMaxUsagePerUser();
+        if (limit > 0) {
+            long used = orderRepository.countSuccessfulCouponUsages(
+                    userId, coupon.getId(), SUCCESSFUL_STATUSES);
+            if (used >= limit) {
+                String msg = limit == 1
+                        ? coupon.getCode() + " can only be used once per customer."
+                        : coupon.getCode() + " can only be used " + limit + " times per customer.";
+                throw new BusinessRuleException(msg);
+            }
+        }
+
         return coupon;
     }
 

@@ -100,6 +100,8 @@ management:
 # ── Application-level properties ──────────────────────────────────────────────
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  cors:
+    allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:3000}
   jwt:
     secret: ${JWT_SECRET:ThisIsADefaultDevSecretKeyThatMustBeChangedInProduction!}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}    # 24 hours

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+/* eslint-disable react/prop-types */
+import { useState } from 'react';
 import {
   Box,
   Button,
@@ -119,7 +120,7 @@ function ContactPage() {
         </Typography>
         <Typography variant="body1" color="text.secondary" maxWidth={560}>
           Have a question, feedback, or just want to say hello?
-          We'd love to hear from you.
+          We&apos;d love to hear from you.
         </Typography>
       </Box>
 
@@ -136,7 +137,7 @@ function ContactPage() {
           <InfoCard
             icon={<EmailIcon fontSize="small" />}
             label="Email"
-            value="teambookstore@gmail.com"
+            value="teambookstore26@gmail.com"
           />
           <InfoCard
             icon={<LocationOnIcon fontSize="small" />}

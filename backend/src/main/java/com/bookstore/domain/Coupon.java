@@ -56,4 +56,17 @@ public class Coupon extends BaseCreatedEntity {
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private boolean isActive = true;
+
+    /**
+     * Maximum number of times a single user may successfully use this coupon.
+     * Counted against CONFIRMED/SHIPPED/DELIVERED orders only.
+     * {@code 1} = once-per-lifetime (e.g. WELCOME20).
+     * {@code 2} = twice per user.
+     * {@code 0} = unlimited (legacy / not enforced).
+     */
+    @NotNull
+    @Column(name = "max_usage_per_user", nullable = false)
+    @ColumnDefault("0")
+    @Builder.Default
+    private int maxUsagePerUser = 0;
 }
