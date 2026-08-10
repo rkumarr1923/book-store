@@ -38,6 +38,7 @@ import EmptyState from '../../common/components/EmptyState/EmptyState';
 import AppPagination from '../../common/components/Pagination/AppPagination';
 import { useAuth } from '../../common/hooks/useAuth';
 import { useCart } from '../../common/hooks/useCart';
+import { useToast } from '../../common/context/ToastContext';
 
 const FORMAT_LABELS = { PAPERBACK: 'Paperback', HARDCOVER: 'Hard Cover', EBOOK: 'eBook' };
 
@@ -115,6 +116,7 @@ function RelatedReadsSidebar({ bookId }) {
 function ReviewsSection({ bookId }) {
   const { isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [page, setPage] = useState(0);
   const [form, setForm] = useState({ rating: 0, reviewText: '' });
   const [submitMsg, setSubmitMsg] = useState(null);
@@ -134,7 +136,8 @@ function ReviewsSection({ bookId }) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.REVIEWS(bookId) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.BOOK_DETAIL(bookId) });
       setForm({ rating: 0, reviewText: '' });
-      setSubmitMsg({ type: 'success', text: 'Review submitted!' });
+      setSubmitMsg(null);
+      toast.success('Review submitted! Thank you for your feedback.');
     },
     onError: (err) => {
       setSubmitMsg({ type: 'error', text: err.response?.data?.message || 'Failed to submit review.' });
@@ -176,7 +179,7 @@ function ReviewsSection({ bookId }) {
             fullWidth
             multiline
             rows={3}
-            placeholder="Placeholder text"
+            placeholder="Share your thoughts about this book…"
             value={form.reviewText}
             onChange={(e) => setForm((f) => ({ ...f, reviewText: e.target.value.slice(0, 100) }))}
             inputProps={{ maxLength: 100 }}
@@ -247,12 +250,10 @@ function BookDetailPage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { addToCart } = useCart();
+  const toast = useToast();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const queryClient = useQueryClient();
-
-  const [cartMsg, setCartMsg] = useState(null);
-  const [wishlistMsg, setWishlistMsg] = useState(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: QUERY_KEYS.BOOK_DETAIL(bookId),
@@ -262,8 +263,8 @@ function BookDetailPage() {
 
   const wishlistMutation = useMutation({
     mutationFn: () => wishlistApi.addToWishlist({ bookId: Number(bookId) }),
-    onSuccess: () => setWishlistMsg({ type: 'success', text: 'Added to wishlist!' }),
-    onError: (err) => setWishlistMsg({ type: 'error', text: err.response?.data?.message || 'Failed to add to wishlist.' }),
+    onSuccess: () => toast.success('Added to wishlist!'),
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to add to wishlist.'),
   });
 
   const book = data?.data;
@@ -275,11 +276,10 @@ function BookDetailPage() {
     }
     const res = await addToCart({ bookId: Number(bookId), quantity: 1 });
     if (res.success) {
-      setCartMsg({ type: 'success', text: 'Added to cart!' });
+      toast.success('Added to cart!');
     } else {
-      setCartMsg({ type: 'error', text: res.message });
+      toast.error(res.message);
     }
-    setTimeout(() => setCartMsg(null), 3000);
   };
 
   const handleAddToWishlist = () => {
@@ -288,7 +288,6 @@ function BookDetailPage() {
       return;
     }
     wishlistMutation.mutate();
-    setTimeout(() => setWishlistMsg(null), 3000);
   };
 
   if (isLoading) return <LoadingSpinner sx={{ mt: 8 }} />;
@@ -318,20 +317,42 @@ function BookDetailPage() {
               }}
             >
               <Box
-                component="img"
-                src={book.coverImageUrl}
-                alt={book.title}
                 sx={{
+                  position: 'relative',
                   width: '100%',
                   maxWidth: 220,
                   aspectRatio: '2/3',
-                  objectFit: 'cover',
                   borderRadius: 2,
-                  display: 'block',
+                  overflow: 'hidden',
                   bgcolor: 'background.paper',
                 }}
-                onError={(e) => { e.target.style.opacity = 0.3; }}
-              />
+              >
+                <Box
+                  component="img"
+                  src={book.coverImageUrl}
+                  alt={book.title}
+                  referrerPolicy="no-referrer"
+                  sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                <Box
+                  sx={{
+                    display: 'none',
+                    position: 'absolute',
+                    inset: 0,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    p: 2,
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary" textAlign="center">
+                    {book.title}
+                  </Typography>
+                </Box>
+              </Box>
             </Box>
 
             {/* Details */}
@@ -400,17 +421,6 @@ function BookDetailPage() {
               )}
 
               {/* Cart / Wishlist actions */}
-              {cartMsg && (
-                <Alert severity={cartMsg.type} sx={{ mb: 1.5 }} onClose={() => setCartMsg(null)}>
-                  {cartMsg.text}
-                </Alert>
-              )}
-              {wishlistMsg && (
-                <Alert severity={wishlistMsg.type} sx={{ mb: 1.5 }} onClose={() => setWishlistMsg(null)}>
-                  {wishlistMsg.text}
-                </Alert>
-              )}
-
               <Stack direction="row" gap={1.5} mb={2} flexWrap="wrap">
                 <Button
                   variant="contained"

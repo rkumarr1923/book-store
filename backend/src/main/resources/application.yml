@@ -34,6 +34,27 @@ spring:
         jdbc:
           time_zone: UTC
 
+  # ── Mail (SMTP) ────────────────────────────────────────────────────────────
+  # Provide MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD to enable email.
+  # For local dev: use Mailtrap (https://mailtrap.io) credentials.
+  # For Gmail: use an App Password (not your account password).
+  mail:
+    host: ${MAIL_HOST:sandbox.smtp.mailtrap.io}
+    port: ${MAIL_PORT:2525}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
   # ── Jackson ───────────────────────────────────────────────────────────────
   jackson:
     default-property-inclusion: non_null
@@ -78,6 +99,7 @@ management:
 
 # ── Application-level properties ──────────────────────────────────────────────
 app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
   jwt:
     secret: ${JWT_SECRET:ThisIsADefaultDevSecretKeyThatMustBeChangedInProduction!}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}    # 24 hours

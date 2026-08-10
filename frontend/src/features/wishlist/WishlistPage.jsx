@@ -2,18 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert,
   Box,
   Button,
   Card,
-  CardContent,
   Chip,
   CircularProgress,
-  Divider,
-  IconButton,
-  Snackbar,
   Stack,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -29,6 +23,7 @@ import EmptyState from '../../common/components/EmptyState/EmptyState';
 import ErrorMessage from '../../common/components/ErrorMessage/ErrorMessage';
 import AppPagination from '../../common/components/Pagination/AppPagination';
 import { useCart } from '../../common/hooks/useCart';
+import { useToast } from '../../common/context/ToastContext';
 
 const FORMAT_LABELS = { PAPERBACK: 'Paperback', HARDCOVER: 'Hard Cover', EBOOK: 'eBook' };
 
@@ -54,6 +49,7 @@ function WishlistItemCard({ item, onRemove, onMoveToCart, mutatingId }) {
         component="img"
         src={book?.coverImageUrl}
         alt={book?.title}
+        referrerPolicy="no-referrer"
         sx={{
           width: 80,
           height: 110,
@@ -132,12 +128,12 @@ function WishlistItemCard({ item, onRemove, onMoveToCart, mutatingId }) {
 
 function WishlistPage() {
   const queryClient = useQueryClient();
-  const { invalidateCart } = useCart();
+  const { invalidateCart, syncCartCount } = useCart();
+  const toast = useToast();
   const [page, setPage] = useState(0);
   const [mutatingId, setMutatingId] = useState(null);
-  const [snack, setSnack] = useState(null);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: [...QUERY_KEYS.WISHLIST, page],
     queryFn: () => wishlistApi.getWishlist({ page, size: 10 }),
   });
@@ -146,26 +142,30 @@ function WishlistPage() {
   const totalPages = data?.data?.totalPages || 0;
   const totalElements = data?.data?.totalElements || 0;
 
+  // A 404 or empty response from the server should show empty state, not an error.
+  const isNetworkError = isError && error?.response?.status !== 404 && !data;
+
   const removeMutation = useMutation({
     mutationFn: (id) => wishlistApi.removeFromWishlist(id),
     onMutate: (id) => setMutatingId(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.WISHLIST });
-      setSnack({ type: 'success', msg: 'Removed from wishlist.' });
+      toast.success('Removed from wishlist.');
     },
-    onError: (err) => setSnack({ type: 'error', msg: err.response?.data?.message || 'Failed to remove.' }),
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to remove from wishlist.'),
     onSettled: () => setMutatingId(null),
   });
 
   const moveToCartMutation = useMutation({
     mutationFn: (id) => wishlistApi.moveToCart(id),
     onMutate: (id) => setMutatingId(id),
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.WISHLIST });
       invalidateCart();
-      setSnack({ type: 'success', msg: 'Moved to cart!' });
+      await syncCartCount();
+      toast.success('Moved to cart!');
     },
-    onError: (err) => setSnack({ type: 'error', msg: err.response?.data?.message || 'Failed to move to cart.' }),
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to move to cart.'),
     onSettled: () => setMutatingId(null),
   });
 
@@ -182,7 +182,7 @@ function WishlistPage() {
 
       {isLoading ? (
         <LoadingSpinner />
-      ) : isError ? (
+      ) : isNetworkError ? (
         <ErrorMessage message="Failed to load wishlist. Please try again." variant="page" />
       ) : items.length === 0 ? (
         <EmptyState
@@ -213,19 +213,6 @@ function WishlistPage() {
         totalPages={totalPages}
         onChange={(_, p) => setPage(p - 1)}
       />
-
-      <Snackbar
-        open={!!snack}
-        autoHideDuration={3000}
-        onClose={() => setSnack(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        {snack ? (
-          <Alert severity={snack.type} onClose={() => setSnack(null)} sx={{ width: '100%' }}>
-            {snack.msg}
-          </Alert>
-        ) : <span />}
-      </Snackbar>
     </Box>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -11,7 +11,6 @@ import {
   Divider,
   FormControlLabel,
   IconButton,
-  Snackbar,
   Stack,
   TextField,
   Tooltip,
@@ -34,6 +33,7 @@ import EmptyState from '../../common/components/EmptyState/EmptyState';
 import ErrorMessage from '../../common/components/ErrorMessage/ErrorMessage';
 import { useCart } from '../../common/hooks/useCart';
 import { useAuth } from '../../common/hooks/useAuth';
+import { useToast } from '../../common/context/ToastContext';
 import PaymentModal from '../payment/PaymentModal';
 
 const FORMAT_LABELS = { PAPERBACK: 'Paperback', HARDCOVER: 'Hard Cover', EBOOK: 'eBook' };
@@ -61,6 +61,7 @@ function CartItemRow({ item, onQuantityChange, onRemove, isPending }) {
         component="img"
         src={item.coverImageUrl}
         alt={item.title}
+        referrerPolicy="no-referrer"
         sx={{
           width: 100,
           height: 140,
@@ -149,13 +150,23 @@ const EMPTY_ADDRESS = {
   city: '', state: '', country: 'India', pinCode: '', email: '', phoneNumber: '',
 };
 
-function AddressForm({ value, onChange, errors = {} }) {
-  const set = (k) => (e) => onChange({ ...value, [k]: e.target.value });
+function AddressForm({ value, onChange, errors = {}, onErrorClear }) {
+  const set = (k) => (e) => {
+    let val = e.target.value;
+    if (k === 'phoneNumber') {
+      val = val.replace(/\D/g, '').slice(0, 10);
+    } else if (k === 'pinCode') {
+      val = val.replace(/\D/g, '').slice(0, 6);
+    }
+    onChange({ ...value, [k]: val });
+    if (onErrorClear) onErrorClear(k);
+  };
+
   return (
     <Box display="grid" gridTemplateColumns={{ xs: '1fr', sm: '1fr 1fr' }} gap={1.5}>
       <TextField label="First Name" value={value.firstName} onChange={set('firstName')} error={!!errors.firstName} helperText={errors.firstName} size="small" />
       <TextField label="Last Name" value={value.lastName} onChange={set('lastName')} error={!!errors.lastName} helperText={errors.lastName} size="small" />
-      <TextField label="Address Line 2" value={value.addressLine1} onChange={set('addressLine1')} error={!!errors.addressLine1} helperText={errors.addressLine1} size="small" sx={{ gridColumn: { sm: '1 / -1' } }} />
+      <TextField label="Address Line 1" value={value.addressLine1} onChange={set('addressLine1')} error={!!errors.addressLine1} helperText={errors.addressLine1} size="small" sx={{ gridColumn: { sm: '1 / -1' } }} />
       <TextField label="Address Line 2 (optional)" value={value.addressLine2} onChange={set('addressLine2')} size="small" sx={{ gridColumn: { sm: '1 / -1' } }} />
       <TextField label="e-mail" type="email" value={value.email} onChange={set('email')} error={!!errors.email} helperText={errors.email} size="small" />
       <TextField label="City" value={value.city} onChange={set('city')} error={!!errors.city} helperText={errors.city} size="small" />
@@ -167,6 +178,7 @@ function AddressForm({ value, onChange, errors = {} }) {
         error={!!errors.phoneNumber}
         helperText={errors.phoneNumber}
         size="small"
+        inputProps={{ maxLength: 10 }}
         InputProps={{
           startAdornment: <Typography variant="body2" sx={{ mr: 0.5, color: 'text.secondary' }}>+91</Typography>,
         }}
@@ -189,6 +201,7 @@ function validateAddress(addr) {
   if (!addr.email?.trim()) e.email = 'Required';
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr.email)) e.email = 'Invalid email';
   if (!addr.phoneNumber?.trim()) e.phoneNumber = 'Required';
+  else if (!/^\d{10}$/.test(addr.phoneNumber)) e.phoneNumber = 'Must be exactly 10 digits';
   return e;
 }
 
@@ -303,6 +316,7 @@ function CheckoutPage() {
   const queryClient = useQueryClient();
   const { invalidateCart, updateCartCount } = useCart();
   const { isAuthenticated, user } = useAuth();
+  const toast = useToast();
 
   const [address, setAddress] = useState(EMPTY_ADDRESS);
   const [addressErrors, setAddressErrors] = useState({});
@@ -335,6 +349,30 @@ function CheckoutPage() {
   const cart = cartData?.data;
   const items = cart?.items || [];
 
+  // Auto-prefill address from saved default when addresses load
+  useEffect(() => {
+    if (defaultAddress && !useSavedAddress) {
+      setUseSavedAddress(true);
+      setAddress({
+        firstName: defaultAddress.firstName || '',
+        lastName: defaultAddress.lastName || '',
+        addressLine1: defaultAddress.addressLine1 || '',
+        addressLine2: defaultAddress.addressLine2 || '',
+        city: defaultAddress.city || '',
+        state: defaultAddress.state || '',
+        country: defaultAddress.country || 'India',
+        pinCode: defaultAddress.pinCode || '',
+        email: defaultAddress.email || user?.email || '',
+        phoneNumber: (defaultAddress.phoneNumber || '').replace(/^\+91/, ''),
+      });
+    } else if (!defaultAddress && user?.email && address.email === '') {
+      // Prefill email from profile even when no address exists
+      setAddress((prev) => ({ ...prev, email: user.email }));
+    }
+    // Only run when addresses first load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultAddress]);
+
   // Compute summary locally (server summary loaded when coupon applied)
   const subtotal = cart?.subtotal || 0;
   const taxRate = 0.12;
@@ -354,15 +392,20 @@ function CheckoutPage() {
   // Cart mutations
   const updateQtyMutation = useMutation({
     mutationFn: ({ cartItemId, quantity }) =>
-      quantity === 0
-        ? cartApi.removeItem(cartItemId)
-        : cartApi.updateItem(cartItemId, { quantity }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CART }),
+      cartApi.updateItem(cartItemId, { quantity }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CART });
+    },
+    onError: () => toast.error('Failed to update quantity. Please try again.'),
   });
 
   const removeItemMutation = useMutation({
     mutationFn: (cartItemId) => cartApi.removeItem(cartItemId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CART }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CART });
+      toast.info('Item removed from cart.');
+    },
+    onError: () => toast.error('Failed to remove item. Please try again.'),
   });
 
   // Apply coupon
@@ -374,8 +417,11 @@ function CheckoutPage() {
       const res = await checkoutApi.validateCoupon({ couponCode: code });
       setDiscount(res.data.discountAmount || 0);
       setCouponApplied(true);
+      toast.success(`Coupon applied! You saved ${res.data.discountAmount > 0 ? `₹${res.data.discountAmount}` : 'on this order'}.`);
     } catch (err) {
-      setCouponError(err.response?.data?.message || 'Invalid coupon code.');
+      const msg = err.response?.data?.message || 'Invalid coupon code.';
+      setCouponError(msg);
+      toast.error(msg);
       setCouponApplied(false);
       setDiscount(0);
     } finally {
@@ -404,6 +450,12 @@ function CheckoutPage() {
 
   // Place order → open payment modal
   const handlePayNow = async () => {
+    // If an order was already placed (e.g. user closed modal), re-open payment for it
+    if (placedOrder) {
+      setPaymentOpen(true);
+      return;
+    }
+
     const errs = validateAddress(address);
     if (Object.keys(errs).length) { setAddressErrors(errs); return; }
     setAddressErrors({});
@@ -441,6 +493,7 @@ function CheckoutPage() {
     invalidateCart();
     updateCartCount(0);
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ORDERS });
+    toast.success('Payment successful! Your order has been placed.');
     navigate('/order-confirmation', { state: { result: paymentResult } });
   };
 
@@ -493,17 +546,27 @@ function CheckoutPage() {
             </Typography>
 
             {savedAddresses.length > 0 && (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={useSavedAddress}
-                    onChange={(e) => handleUseSavedAddress(e.target.checked)}
-                    size="small"
-                  />
-                }
-                label={<Typography variant="body2">Use Saved Address</Typography>}
-                sx={{ mb: 2 }}
-              />
+              <Box mb={2}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={useSavedAddress}
+                      onChange={(e) => handleUseSavedAddress(e.target.checked)}
+                      size="small"
+                    />
+                  }
+                  label={
+                    <Typography variant="body2">
+                      Use saved address
+                      {useSavedAddress && defaultAddress && (
+                        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                          ({defaultAddress.firstName} {defaultAddress.lastName}, {defaultAddress.city})
+                        </Typography>
+                      )}
+                    </Typography>
+                  }
+                />
+              </Box>
             )}
 
             {placeError && (
@@ -516,6 +579,7 @@ function CheckoutPage() {
               value={address}
               onChange={setAddress}
               errors={addressErrors}
+              onErrorClear={(k) => setAddressErrors((er) => ({ ...er, [k]: '' }))}
             />
           </Box>
         </Box>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Card, CardContent, CardMedia, Chip, Stack, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { buildRoute } from '../../constants/routes';
@@ -20,6 +20,10 @@ const FORMAT_LABELS = {
  */
 function BookCard({ book, compact = false }) {
   const navigate = useNavigate();
+  const [imgError, setImgError] = useState(false);
+
+  // Reset error flag whenever the cover URL changes (same instance, different book prop)
+  useEffect(() => { setImgError(false); }, [book?.coverImageUrl]);
 
   if (!book) return null;
 
@@ -57,6 +61,7 @@ function BookCard({ book, compact = false }) {
           component="img"
           src={coverImageUrl}
           alt={title}
+          referrerPolicy="no-referrer"
           sx={{
             width: 64,
             height: 88,
@@ -136,11 +141,13 @@ function BookCard({ book, compact = false }) {
           overflow: 'hidden',
         }}
       >
-        {coverImageUrl ? (
+        {coverImageUrl && !imgError ? (
           <CardMedia
             component="img"
             image={coverImageUrl}
             alt={title}
+            referrerPolicy="no-referrer"
+            onError={() => setImgError(true)}
             sx={{
               position: 'absolute',
               top: 0,

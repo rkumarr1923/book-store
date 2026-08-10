@@ -44,6 +44,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final UserMapper          userMapper;
     private final AppProperties       appProperties;
+    private final EmailService        emailService;
 
     // ── Register ──────────────────────────────────────────────────────────────
 
@@ -80,6 +81,9 @@ public class AuthService {
 
         user = userRepository.save(user);
         log.info("Registered new user with email '{}'", user.getEmail());
+
+        // Send welcome email asynchronously (fire-and-forget; never blocks registration)
+        emailService.sendWelcomeEmail(user);
 
         String token = jwtTokenProvider.generateTokenFromEmail(user.getEmail());
         return AuthResponse.builder()

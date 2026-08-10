@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import {
-  Alert,
   Box,
   Button,
   Chip,
   CircularProgress,
-  Divider,
-  Snackbar,
   Stack,
   Typography,
 } from '@mui/material';
@@ -24,6 +21,7 @@ import EmptyState from '../../common/components/EmptyState/EmptyState';
 import ErrorMessage from '../../common/components/ErrorMessage/ErrorMessage';
 import AppPagination from '../../common/components/Pagination/AppPagination';
 import { useCart } from '../../common/hooks/useCart';
+import { useToast } from '../../common/context/ToastContext';
 
 const FORMAT_LABELS = { PAPERBACK: 'Paperback', HARDCOVER: 'Hard Cover', EBOOK: 'eBook' };
 
@@ -34,6 +32,9 @@ const STATUS_COLORS = {
   DELIVERED: 'success',
   CANCELLED: 'error',
 };
+
+// Orders with PLACED status haven't been paid yet — don't show them in history
+const VISIBLE_STATUSES = new Set(['CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']);
 
 // ─── Order Card ───────────────────────────────────────────────────────────────
 
@@ -89,6 +90,7 @@ function OrderCard({ order, onBuyAgain, isBuyingAgain }) {
               component="img"
               src={item.coverImageUrl}
               alt={item.title}
+              referrerPolicy="no-referrer"
               sx={{ width: 48, height: 64, objectFit: 'cover', borderRadius: 0.75, flexShrink: 0, bgcolor: 'rgba(255,255,255,0.04)' }}
               onError={(e) => { e.target.style.opacity = 0.3; }}
             />
@@ -135,30 +137,31 @@ function OrderCard({ order, onBuyAgain, isBuyingAgain }) {
 // ─── My Orders Page ───────────────────────────────────────────────────────────
 
 function MyOrdersPage() {
-  const queryClient = useQueryClient();
-  const { invalidateCart } = useCart();
+  const navigate = useNavigate();
+  const { invalidateCart, syncCartCount } = useCart();
+  const toast = useToast();
   const [page, setPage] = useState(0);
   const [buyingAgainId, setBuyingAgainId] = useState(null);
-  const [snack, setSnack] = useState(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [...QUERY_KEYS.ORDERS, page],
     queryFn: () => orderApi.getOrders({ page, size: 10 }),
   });
 
-  const orders = data?.data?.content || [];
+  const allOrders = data?.data?.content || [];
+  const orders = allOrders.filter((o) => VISIBLE_STATUSES.has(o.status));
   const totalPages = data?.data?.totalPages || 0;
-  const totalElements = data?.data?.totalElements || 0;
 
   const buyAgainMutation = useMutation({
     mutationFn: (orderId) => orderApi.buyAgain(orderId),
     onMutate: (id) => setBuyingAgainId(id),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       invalidateCart();
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CART });
-      setSnack({ type: 'success', msg: `${res.data?.itemsAdded || ''} item(s) added to cart.` });
+      await syncCartCount();
+      const count = res.data?.itemsAdded;
+      toast.success(`${count ? `${count} item(s)` : 'Items'} added to cart.`);
     },
-    onError: (err) => setSnack({ type: 'error', msg: err.response?.data?.message || 'Failed to add items to cart.' }),
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to add items to cart.'),
     onSettled: () => setBuyingAgainId(null),
   });
 
@@ -167,9 +170,9 @@ function MyOrdersPage() {
       <Typography variant="h4" fontWeight={700} mb={0.5}>
         My Orders
       </Typography>
-      {totalElements > 0 && (
+      {orders.length > 0 && (
         <Typography variant="body2" color="text.secondary" mb={3}>
-          {totalElements} {totalElements === 1 ? 'order' : 'orders'}
+          {orders.length} {orders.length === 1 ? 'order' : 'orders'}
         </Typography>
       )}
 
@@ -181,7 +184,7 @@ function MyOrdersPage() {
         <EmptyState
           title="No orders yet"
           subtitle="Your purchase history will appear here after your first order."
-          action={<Button variant="contained" onClick={() => window.location.assign(ROUTES.HOME)}>Start Shopping</Button>}
+          action={<Button variant="contained" onClick={() => navigate(ROUTES.HOME)}>Start Shopping</Button>}
         />
       ) : (
         <Stack spacing={2}>
@@ -197,19 +200,6 @@ function MyOrdersPage() {
       )}
 
       <AppPagination page={page + 1} totalPages={totalPages} onChange={(_, p) => setPage(p - 1)} />
-
-      <Snackbar
-        open={!!snack}
-        autoHideDuration={3000}
-        onClose={() => setSnack(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        {snack ? (
-          <Alert severity={snack.type} onClose={() => setSnack(null)} sx={{ width: '100%' }}>
-            {snack.msg}
-          </Alert>
-        ) : <span />}
-      </Snackbar>
     </Box>
   );
 }

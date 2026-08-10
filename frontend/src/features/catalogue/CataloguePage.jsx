@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -14,6 +14,7 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import CloseIcon from '@mui/icons-material/Close';
 
 import { bookApi } from '../../common/api/bookApi';
+import { genreApi } from '../../common/api/genreApi';
 import { QUERY_KEYS } from '../../common/constants/queryKeys';
 import GenreSidebar from '../../common/components/GenreSidebar/GenreSidebar';
 import SearchBar from '../../common/components/SearchBar/SearchBar';
@@ -33,11 +34,18 @@ function CataloguePage() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // ─── Fetch genres (needed to resolve name from slug) ─────────────
+  const { data: genreData } = useQuery({
+    queryKey: QUERY_KEYS.GENRES,
+    queryFn: genreApi.getAllGenres,
+    staleTime: 1000 * 60 * 10,
+  });
+  const allGenres = useMemo(() => genreData?.data || [], [genreData]);
+
   // ─── State derived from URL params ──────────────────────────────
   const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [selectedGenre, setSelectedGenre] = useState(searchParams.get('genreName') || 'All');
   const [filters, setFilters] = useState({
-    genreSlug: searchParams.get('genreSlug') || '',
+    genreSlug: (searchParams.get('genreSlug') || '').toLowerCase() === 'all' ? '' : (searchParams.get('genreSlug') || ''),
     language: searchParams.get('language') || 'All',
     format: searchParams.get('format') || '',
     minPrice: Number(searchParams.get('minPrice')) || 0,
@@ -46,15 +54,30 @@ function CataloguePage() {
   });
   const [page, setPage] = useState(Number(searchParams.get('page')) || 0);
 
+  // Derive the active genre name from the slug for sidebar highlighting
+  const selectedGenre = useMemo(() => {
+    const slug = filters.genreSlug;
+    if (!slug) return 'All';
+    const found = allGenres.find((g) => g.slug === slug);
+    return found ? found.name : 'All';
+  }, [filters.genreSlug, allGenres]);
+
   const debouncedSearch = useDebounce(search, 500);
 
-  // Sync URL → state when navigating from other pages
+  // Track whether the URL was changed by us (state→URL) or by an external navigation
+  const selfUpdatingRef = useRef(false);
+
+  // Sync URL → state only when navigating from another page (not from our own setSearchParams)
   useEffect(() => {
+    if (selfUpdatingRef.current) {
+      selfUpdatingRef.current = false;
+      return;
+    }
     const sp = searchParams;
     setSearch(sp.get('search') || '');
-    setSelectedGenre(sp.get('genreName') || 'All');
+    const rawSlug = sp.get('genreSlug') || '';
     setFilters({
-      genreSlug: sp.get('genreSlug') || '',
+      genreSlug: rawSlug.toLowerCase() === 'all' ? '' : rawSlug,
       language: sp.get('language') || 'All',
       format: sp.get('format') || '',
       minPrice: Number(sp.get('minPrice')) || 0,
@@ -68,16 +91,16 @@ function CataloguePage() {
   useEffect(() => {
     const params = {};
     if (debouncedSearch) params.search = debouncedSearch;
-    if (filters.genreSlug) { params.genreSlug = filters.genreSlug; }
-    if (selectedGenre && selectedGenre !== 'All') params.genreName = selectedGenre;
+    if (filters.genreSlug) params.genreSlug = filters.genreSlug;
     if (filters.language && filters.language !== 'All') params.language = filters.language;
     if (filters.format) params.format = filters.format;
     if (filters.minPrice > 0) params.minPrice = String(filters.minPrice);
     if (filters.maxPrice < 5000) params.maxPrice = String(filters.maxPrice);
     if (filters.sortBy && filters.sortBy !== 'relevance') params.sortBy = filters.sortBy;
     if (page > 0) params.page = String(page);
+    selfUpdatingRef.current = true;
     setSearchParams(params, { replace: true });
-  }, [debouncedSearch, filters, page, selectedGenre]);
+  }, [debouncedSearch, filters, page]);
 
   // Build API query params
   const apiParams = {
@@ -102,8 +125,7 @@ function CataloguePage() {
   const totalPages = data?.data?.totalPages || 0;
   const totalElements = data?.data?.totalElements || 0;
 
-  const handleGenreSelect = (name, slug) => {
-    setSelectedGenre(name);
+  const handleGenreSelect = (_, slug) => {
     setFilters((f) => ({ ...f, genreSlug: slug }));
     setPage(0);
   };
@@ -153,7 +175,7 @@ function CataloguePage() {
           <SearchBar
             value={search}
             onChange={handleSearchChange}
-            placeholder="Search you want to read here"
+            placeholder="Search what you want to read"
             sx={{ maxWidth: 320, flex: '1 1 200px' }}
           />
           <FilterBar filters={filters} onChange={handleFilterChange} />

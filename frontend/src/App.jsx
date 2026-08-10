@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { ROUTES } from './common/constants/routes';
 import MainLayout from './common/layout/MainLayout';
 import ProtectedRoute from './common/components/ProtectedRoute/ProtectedRoute';
+import ScrollToTop from './common/components/ScrollToTop/ScrollToTop';
+import { useAuth } from './common/hooks/useAuth';
 
 // Feature pages
 import HomePage from './features/home/HomePage';
@@ -17,9 +19,19 @@ import ProfilePage from './features/profile/ProfilePage';
 import OrderConfirmationPage from './features/payment/OrderConfirmationPage';
 import NotFoundPage from './features/NotFoundPage';
 import AuthModal from './features/auth/AuthModal';
+import { SessionTimeoutModal } from './features/auth/SessionTimeoutModal';
+
+// Static pages
+import AboutPage from './features/static/AboutPage';
+import PrivacyPage from './features/static/PrivacyPage';
+import TermsPage from './features/static/TermsPage';
+import ContactPage from './features/static/ContactPage';
 
 function App() {
   const [loginOpen, setLoginOpen] = useState(false);
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Allow any component to open the login modal via a custom event
   useEffect(() => {
@@ -28,8 +40,25 @@ function App() {
     return () => window.removeEventListener('open:login', handler);
   }, []);
 
+  // Open login modal when ProtectedRoute redirects here with requireLogin flag
+  useEffect(() => {
+    if (location.state?.requireLogin) {
+      setLoginOpen(true);
+    }
+  }, [location.state]);
+
+  // After successful login, redirect back to the intended page
+  useEffect(() => {
+    if (isAuthenticated && location.state?.from) {
+      const from = location.state.from;
+      navigate(from.pathname + (from.search || '') + (from.hash || ''), { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
   return (
     <>
+      <ScrollToTop />
       <Routes>
         <Route element={<MainLayout onLoginOpen={() => setLoginOpen(true)} />}>
           {/* Public routes */}
@@ -88,13 +117,20 @@ function App() {
             }
           />
 
+          {/* Static / info pages */}
+          <Route path={ROUTES.ABOUT}   element={<AboutPage />} />
+          <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />
+          <Route path={ROUTES.TERMS}   element={<TermsPage />} />
+          <Route path={ROUTES.CONTACT} element={<ContactPage />} />
+
           {/* 404 */}
           <Route path={ROUTES.NOT_FOUND} element={<NotFoundPage />} />
         </Route>
       </Routes>
 
-      {/* Global auth modal — rendered outside route tree */}
+      {/* Global auth modal & inactivity session timeout monitor */}
       <AuthModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+      <SessionTimeoutModal />
     </>
   );
 }

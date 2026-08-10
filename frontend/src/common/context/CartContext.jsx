@@ -9,6 +9,21 @@ export function CartProvider({ children }) {
   const queryClient = useQueryClient();
   const [cartCount, setCartCount] = useState(0);
 
+  // Reset cart and all user-specific query caches on logout
+  useEffect(() => {
+    const handleReset = () => {
+      setCartCount(0);
+      // Remove all user-specific cached data so the next login starts fresh
+      queryClient.removeQueries({ queryKey: QUERY_KEYS.CART });
+      queryClient.removeQueries({ queryKey: QUERY_KEYS.WISHLIST });
+      queryClient.removeQueries({ queryKey: QUERY_KEYS.ORDERS });
+      queryClient.removeQueries({ queryKey: QUERY_KEYS.FOLLOWED_AUTHORS });
+      queryClient.removeQueries({ queryKey: ['addresses'] });
+    };
+    window.addEventListener('cart:reset', handleReset);
+    return () => window.removeEventListener('cart:reset', handleReset);
+  }, [queryClient]);
+
   const updateCartCount = useCallback((count) => {
     setCartCount(count ?? 0);
   }, []);

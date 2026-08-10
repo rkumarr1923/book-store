@@ -60,18 +60,23 @@ public class BookService {
             String sortBy) {
 
         size = Math.min(size, AppConstants.Pagination.MAX_PAGE_SIZE);
-        Pageable pageable = PageRequest.of(page, size, resolveSort(sortBy));
+        Sort     sort     = resolveSort(sortBy);
+        Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Book> bookPage;
 
         if (StringUtils.hasText(search)) {
             bookPage = bookRepository.searchByTitleOrAuthorName(search.trim(), pageable);
-        } else if (StringUtils.hasText(genreSlug)) {
+        } else if (StringUtils.hasText(genreSlug) && !genreSlug.equalsIgnoreCase("all")) {
             Long genreId = genreRepository.findBySlug(genreSlug)
-                    .orElseThrow(() -> new ResourceNotFoundException("Genre", "slug", genreSlug))
-                    .getId();
-            bookPage = bookRepository.findByIsActiveTrueAndGenreId(genreId, pageable);
-        } else if (StringUtils.hasText(language)) {
+                    .map(g -> g.getId())
+                    .orElse(null);
+            if (genreId != null) {
+                bookPage = bookRepository.findByIsActiveTrueAndGenreId(genreId, pageable);
+            } else {
+                bookPage = bookRepository.findByIsActiveTrue(pageable);
+            }
+        } else if (StringUtils.hasText(language) && !language.equalsIgnoreCase("All")) {
             bookPage = bookRepository.findByIsActiveTrueAndLanguageIgnoreCase(language, pageable);
         } else if (StringUtils.hasText(format)) {
             BookFormat bookFormat = BookFormat.valueOf(format.toUpperCase());

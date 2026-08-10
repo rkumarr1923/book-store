@@ -10,6 +10,11 @@ export const ROUTES = {
   MY_WRITERS: '/my-writers',
   PROFILE: '/profile',
   ORDER_CONFIRMATION: '/order-confirmation',
+  // Static / info pages
+  ABOUT: '/about',
+  PRIVACY: '/privacy',
+  TERMS: '/terms',
+  CONTACT: '/contact',
   NOT_FOUND: '*',
 };
 

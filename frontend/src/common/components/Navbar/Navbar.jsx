@@ -25,11 +25,13 @@ import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useCart } from '../../hooks/useCart';
+import { useToast } from '../../context/ToastContext';
 import { ROUTES } from '../../constants/routes';
 
 function Navbar({ onLoginOpen }) {
   const { isAuthenticated, user, logout } = useAuth();
   const { cartCount, syncCartCount } = useCart();
+  const toast = useToast();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -51,6 +53,7 @@ function Navbar({ onLoginOpen }) {
     handleMenuClose();
     await logout();
     navigate(ROUTES.HOME);
+    toast.authNotify('info', 'Signed Out', 'You have been signed out. See you soon!');
   };
 
   const navLinks = [

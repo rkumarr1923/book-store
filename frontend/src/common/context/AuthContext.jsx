@@ -38,7 +38,14 @@ export function AuthProvider({ children }) {
 
   // Listen for 401 events from axiosClient
   useEffect(() => {
-    const handleForceLogout = () => clearAuth();
+    const handleForceLogout = () => {
+      clearAuth();
+      window.dispatchEvent(
+        new CustomEvent('auth:expired', {
+          detail: 'Your session has expired. Please log in again.',
+        })
+      );
+    };
     window.addEventListener('auth:logout', handleForceLogout);
     return () => window.removeEventListener('auth:logout', handleForceLogout);
   }, [clearAuth]);
@@ -90,6 +97,8 @@ export function AuthProvider({ children }) {
       // ignore logout API errors
     } finally {
       clearAuth();
+      // Notify the cart context to reset the count
+      window.dispatchEvent(new Event('cart:reset'));
     }
   }, [clearAuth]);
 

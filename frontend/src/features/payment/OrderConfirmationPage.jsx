@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -20,6 +20,15 @@ function OrderConfirmationPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const result = location.state?.result;
+
+  // If the user lands here directly (e.g. via refresh), redirect home.
+  useEffect(() => {
+    if (!result) {
+      navigate(ROUTES.HOME, { replace: true });
+    }
+  }, [result, navigate]);
+
+  if (!result) return null;
 
   const order = result?.order;
   const items = order?.items || [];
@@ -82,6 +91,7 @@ function OrderConfirmationPage() {
                   component="img"
                   src={item.coverImageUrl}
                   alt={item.title}
+                  referrerPolicy="no-referrer"
                   sx={{
                     width: 72,
                     height: 100,

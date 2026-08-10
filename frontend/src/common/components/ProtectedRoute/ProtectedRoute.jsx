@@ -18,6 +18,7 @@ function ProtectedRoute({ children }) {
   }
 
   if (!isAuthenticated) {
+    // Preserve the current path so we can redirect back after login
     return <Navigate to={ROUTES.HOME} state={{ from: location, requireLogin: true }} replace />;
   }
 

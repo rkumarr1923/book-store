@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   FormControl,
@@ -9,12 +9,12 @@ import {
   Typography,
 } from '@mui/material';
 
-const LANGUAGES = ['All', 'English', 'Hindi', 'Tamil', 'Telugu', 'Malayalam', 'Kannada'];
+const LANGUAGES = ['All', 'English', 'Tamil', 'Hindi', 'Malayalam', 'Kannada', 'Telugu', 'Marathi'];
 const FORMATS = [
-  { value: '', label: 'All' },
+  { value: 'all', label: 'All' },
   { value: 'PAPERBACK', label: 'Paperback' },
-  { value: 'HARDCOVER', label: 'Hard Cover' },
-  { value: 'EBOOK', label: 'eBook' },
+  { value: 'HARDCOVER', label: 'Hardcover' },
+  { value: 'EBOOK',     label: 'eBook' },
 ];
 const SORT_OPTIONS = [
   { value: 'relevance', label: 'Relevance' },
@@ -32,10 +32,27 @@ const SORT_OPTIONS = [
  *   onChange: (partial filters) => void
  */
 function FilterBar({ filters = {}, onChange }) {
-  const { language = 'All', format = '', minPrice = 0, maxPrice = 2000, sortBy = 'relevance' } = filters;
+  const rawFormat = filters.format || '';
+  const displayFormat = rawFormat === '' ? 'all' : rawFormat;
+  const { language = 'All', minPrice = 0, maxPrice = 5000, sortBy = 'relevance' } = filters;
 
-  const set = (key) => (e) => onChange({ [key]: e.target.value });
-  const setPrice = (_, v) => onChange({ minPrice: v[0], maxPrice: v[1] });
+  // Local slider state so the thumb moves smoothly while dragging
+  // without triggering an API call on every pixel.
+  const [localPrice, setLocalPrice] = useState([minPrice, maxPrice]);
+
+  // Keep local state in sync if the filter is reset externally (e.g. URL change)
+  React.useEffect(() => {
+    setLocalPrice([minPrice, maxPrice]);
+  }, [minPrice, maxPrice]);
+
+  const set = (key) => (e) => {
+    const val = e.target.value;
+    onChange({ [key]: key === 'format' && val === 'all' ? '' : val });
+  };
+  // While dragging: update local display only (no API call)
+  const handlePriceChange = (_, v) => setLocalPrice(v);
+  // On release: commit to parent → triggers API call once
+  const handlePriceCommit = (_, v) => onChange({ minPrice: v[0], maxPrice: v[1] });
 
   return (
     <Box
@@ -55,9 +72,9 @@ function FilterBar({ filters = {}, onChange }) {
       </FormControl>
 
       {/* Format */}
-      <FormControl size="small" sx={{ minWidth: 160 }}>
-        <InputLabel>Format (Paperback, eBook etc)</InputLabel>
-        <Select value={format} label="Format (Paperback, eBook etc)" onChange={set('format')}>
+      <FormControl size="small" sx={{ minWidth: 120 }}>
+        <InputLabel>Format</InputLabel>
+        <Select value={displayFormat} label="Format" onChange={set('format')}>
           {FORMATS.map((f) => (
             <MenuItem key={f.value} value={f.value}>{f.label}</MenuItem>
           ))}
@@ -67,11 +84,12 @@ function FilterBar({ filters = {}, onChange }) {
       {/* Price Range */}
       <Box sx={{ minWidth: 160, px: 1 }}>
         <Typography variant="caption" color="text.secondary" gutterBottom>
-          Price Range: ₹{minPrice} – ₹{maxPrice}
+          Price: ₹{localPrice[0]} – ₹{localPrice[1]}
         </Typography>
         <Slider
-          value={[minPrice, maxPrice]}
-          onChange={setPrice}
+          value={localPrice}
+          onChange={handlePriceChange}
+          onChangeCommitted={handlePriceCommit}
           min={0}
           max={5000}
           step={50}

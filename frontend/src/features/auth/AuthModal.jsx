@@ -18,14 +18,15 @@ import {
 import CloseIcon from '@mui/icons-material/Close';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
-import '@mui/icons-material/PersonOutline';
 import { useAuth } from '../../common/hooks/useAuth';
+import { useToast } from '../../common/context/ToastContext';
 import { isValidEmail, isValidPassword } from '../../common/utils/validators';
 
 // ─── Sub-views ────────────────────────────────────────────────────────────────
 
 function LoginView({ onSwitch, onGuest, onClose }) {
   const { login, loading } = useAuth();
+  const toast = useToast();
   const [form, setForm] = useState({ identifier: '', password: '' });
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
@@ -42,6 +43,7 @@ function LoginView({ onSwitch, onGuest, onClose }) {
     const res = await login({ identifier: form.identifier.trim(), password: form.password });
     if (res.success) {
       onClose();
+      toast.authNotify('success', 'Sign In Successful', 'Welcome back! You are now signed in.');
     } else {
       setError(res.message);
     }
@@ -152,6 +154,7 @@ function LoginView({ onSwitch, onGuest, onClose }) {
 
 function RegisterView({ onSwitch, onClose }) {
   const { register, loading } = useAuth();
+  const toast = useToast();
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -198,6 +201,11 @@ function RegisterView({ onSwitch, onClose }) {
     const res = await register(payload);
     if (res.success) {
       onClose();
+      toast.authNotify(
+        'success',
+        'Registration Successful',
+        `Welcome to BookStore, ${payload.firstName}! Your account has been created.`
+      );
     } else {
       setApiError(res.message);
     }
@@ -321,6 +329,7 @@ function RegisterView({ onSwitch, onClose }) {
 // ─── Forgot Password ──────────────────────────────────────────────────────────
 
 function ForgotPasswordView({ onSwitch, onClose }) {
+  const toast = useToast();
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('idle'); // idle | loading | done | error
   const [message, setMessage] = useState('');
@@ -337,6 +346,7 @@ function ForgotPasswordView({ onSwitch, onClose }) {
       await authApi.forgotPassword({ email });
       setStatus('done');
       setMessage('If this email is registered, a reset link has been sent.');
+      toast.info('Password reset instructions sent — check your email.');
     } catch {
       setStatus('error');
       setMessage('Something went wrong. Please try again.');

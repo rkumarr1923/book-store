@@ -1,4 +1,4 @@
-# Book Worm — E-Commerce Book Store
+# BookStore — E-Commerce Book Store
 
 A full-stack, production-quality eCommerce platform for discovering, browsing, and purchasing books online. Built as an AI-Assisted Software Engineering Proof of Concept using [IBM Bob](https://www.ibm.com/products/watsonx-code-assistant).
 
@@ -22,7 +22,7 @@ A full-stack, production-quality eCommerce platform for discovering, browsing, a
 
 ## 1. Project Overview
 
-**Book Worm** is a single-storefront online bookstore targeting the Indian market. It supports the full customer journey — from unauthenticated browsing and discovery through authenticated checkout and order confirmation.
+**BookStore** is a single-storefront online bookstore targeting the Indian market. It supports the full customer journey — from unauthenticated browsing and discovery through authenticated checkout and order confirmation.
 
 ### Key Features
 
@@ -374,7 +374,7 @@ Copy `backend/.env.example` and fill in values.
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `VITE_API_BASE_URL` | Backend API base URL | `https://book-store.onrender.com/api/v1` |
-| `VITE_APP_NAME` | Application name | `Book Worm` |
+| `VITE_APP_NAME` | Application name | `BookStore` |
 
 Copy `frontend/.env.example` and fill in values.
 

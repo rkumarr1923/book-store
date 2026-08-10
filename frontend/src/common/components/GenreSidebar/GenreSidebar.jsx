@@ -1,36 +1,8 @@
 import React from 'react';
-import { Box, Grid, Skeleton, Typography } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
-
-const GENRES = [
-  'All', 'Romance', 'Mystery', 'Science Fiction', 'Fantasy', 'Historical',
-  'Biography', 'Self-help', 'Memoir', 'Travel', 'Cooking', "Children's",
-  'Young Adult', 'Comics & Graphic Novels', 'Poetry', 'Drama', 'Science',
-  'Philosophy', 'Religion', 'Language Learning',
-];
-
-const GENRE_SLUG_MAP = {
-  'All': '',
-  'Romance': 'romance',
-  'Mystery': 'mystery',
-  'Science Fiction': 'science-fiction',
-  'Fantasy': 'fantasy',
-  'Historical': 'historical',
-  'Biography': 'biography',
-  'Self-help': 'self-help',
-  'Memoir': 'memoir',
-  'Travel': 'travel',
-  'Cooking': 'cooking',
-  "Children's": 'childrens',
-  'Young Adult': 'young-adult',
-  'Comics & Graphic Novels': 'comics-graphic-novels',
-  'Poetry': 'poetry',
-  'Drama': 'drama',
-  'Science': 'science',
-  'Philosophy': 'philosophy',
-  'Religion': 'religion',
-  'Language Learning': 'language-learning',
-};
+import { Box, Skeleton, Typography } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import { genreApi } from '../../api/genreApi';
+import { QUERY_KEYS } from '../../constants/queryKeys';
 
 /**
  * Genre sidebar for the left panel.
@@ -38,14 +10,17 @@ const GENRE_SLUG_MAP = {
  *
  * Props:
  *  selected: string — currently active genre name
- *  genres: array — optional API genres (falls back to static list)
  *  onSelect: (genreName, slug) => void
  */
-function GenreSidebar({ selected = 'All', genres, onSelect }) {
-  const navigate = useNavigate();
-  const list = genres?.length
-    ? [{ name: 'All', slug: '' }, ...genres]
-    : GENRES.map((n) => ({ name: n, slug: GENRE_SLUG_MAP[n] || n.toLowerCase().replace(/\s+/g, '-') }));
+function GenreSidebar({ selected = 'All', onSelect }) {
+  const { data, isLoading } = useQuery({
+    queryKey: QUERY_KEYS.GENRES,
+    queryFn: genreApi.getAllGenres,
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const apiGenres = data?.data || [];
+  const list = [{ name: 'All', slug: '' }, ...apiGenres];
 
   return (
     <Box
@@ -55,7 +30,11 @@ function GenreSidebar({ selected = 'All', genres, onSelect }) {
         flexShrink: 0,
       }}
     >
-      {list.map((g) => {
+      {isLoading
+        ? Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} height={28} sx={{ mb: 0.25, borderRadius: 1 }} />
+          ))
+        : list.map((g) => {
         const active = g.name === selected;
         return (
           <Typography
@@ -83,8 +62,8 @@ function GenreSidebar({ selected = 'All', genres, onSelect }) {
           >
             {g.name}
           </Typography>
-        );
-      })}
+          );
+        })}
     </Box>
   );
 }

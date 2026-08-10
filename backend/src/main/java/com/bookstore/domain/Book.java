@@ -21,7 +21,10 @@ import java.util.List;
  * - Genres are mapped Many-to-Many via the {@code book_genres} join table.
  */
 @Entity
-@Table(name = "books")
+@Table(
+        name = "books",
+        uniqueConstraints = @UniqueConstraint(name = "uk_books_isbn", columnNames = "isbn")
+)
 @Getter
 @Setter
 @NoArgsConstructor

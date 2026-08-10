@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert,
   Avatar,
   Box,
   Button,
   CircularProgress,
   Divider,
-  Snackbar,
   Stack,
   Typography,
 } from '@mui/material';
@@ -16,12 +14,13 @@ import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
 
 import { authorApi } from '../../common/api/authorApi';
 import { QUERY_KEYS } from '../../common/constants/queryKeys';
-import { buildRoute } from '../../common/constants/routes';
+import { buildRoute, ROUTES } from '../../common/constants/routes';
 import LoadingSpinner from '../../common/components/LoadingSpinner/LoadingSpinner';
 import EmptyState from '../../common/components/EmptyState/EmptyState';
 import ErrorMessage from '../../common/components/ErrorMessage/ErrorMessage';
 import AppPagination from '../../common/components/Pagination/AppPagination';
 import BookCard from '../../common/components/BookCard/BookCard';
+import { useToast } from '../../common/context/ToastContext';
 
 // ─── Single followed-author card ──────────────────────────────────────────────
 
@@ -107,10 +106,11 @@ function FollowedAuthorCard({ author, onUnfollow, isUnfollowing }) {
 // ─── My Writers Page ──────────────────────────────────────────────────────────
 
 function MyWritersPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [page, setPage] = useState(0);
   const [unfollowingId, setUnfollowingId] = useState(null);
-  const [snack, setSnack] = useState(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [...QUERY_KEYS.FOLLOWED_AUTHORS, page],
@@ -126,9 +126,9 @@ function MyWritersPage() {
     onMutate: (id) => setUnfollowingId(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FOLLOWED_AUTHORS });
-      setSnack({ type: 'success', msg: 'Author unfollowed.' });
+      toast.info('Author unfollowed.');
     },
-    onError: (err) => setSnack({ type: 'error', msg: err.response?.data?.message || 'Failed to unfollow.' }),
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to unfollow author.'),
     onSettled: () => setUnfollowingId(null),
   });
 
@@ -151,6 +151,11 @@ function MyWritersPage() {
         <EmptyState
           title="You're not following any authors"
           subtitle="Discover authors you love and follow them to stay updated on new releases."
+          action={
+            <Button variant="contained" onClick={() => navigate(ROUTES.CATALOGUE)}>
+              Explore Books
+            </Button>
+          }
         />
       ) : (
         <Stack spacing={2}>
@@ -166,19 +171,6 @@ function MyWritersPage() {
       )}
 
       <AppPagination page={page + 1} totalPages={totalPages} onChange={(_, p) => setPage(p - 1)} />
-
-      <Snackbar
-        open={!!snack}
-        autoHideDuration={3000}
-        onClose={() => setSnack(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        {snack ? (
-          <Alert severity={snack.type} onClose={() => setSnack(null)} sx={{ width: '100%' }}>
-            {snack.msg}
-          </Alert>
-        ) : <span />}
-      </Snackbar>
     </Box>
   );
 }

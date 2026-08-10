@@ -5,12 +5,12 @@ import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
 import App from './App';
 import theme from './theme/theme';
 import { AuthProvider } from './common/context/AuthContext';
 import { CartProvider } from './common/context/CartContext';
+import { ToastProvider } from './common/context/ToastContext';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,11 +30,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <CssBaseline />
           <AuthProvider>
             <CartProvider>
-              <App />
+              <ToastProvider>
+                <App />
+              </ToastProvider>
             </CartProvider>
           </AuthProvider>
         </ThemeProvider>
-        <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>
     </BrowserRouter>
   </React.StrictMode>

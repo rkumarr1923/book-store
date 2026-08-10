@@ -13,7 +13,7 @@ import SearchIcon from '@mui/icons-material/Search';
 function SearchBar({
   value,
   onChange,
-  placeholder = 'Search you want to read here',
+  placeholder = 'Search what you want to read',
   sx = {},
 }) {
   return (

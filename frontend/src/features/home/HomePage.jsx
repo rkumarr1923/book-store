@@ -4,13 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Button,
-  Container,
   Divider,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import MenuBookIcon from '@mui/icons-material/MenuBook';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 
 import { homeApi } from '../../common/api/homeApi';
@@ -90,7 +88,6 @@ function HomePage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const [selectedGenre, setSelectedGenre] = useState('All');
   const [filters, setFilters] = useState({
     language: 'All',
     format: '',
@@ -110,14 +107,21 @@ function HomePage() {
   const bestsellers = sections.bestsellers || [];
   const newLaunches = sections.newLaunches || [];
 
-  const handleGenreSelect = (name, slug) => {
-    setSelectedGenre(name);
+  const handleGenreSelect = (_, slug) => {
     const params = slug ? `?genreSlug=${slug}` : '';
     navigate(`${ROUTES.CATALOGUE}${params}`);
   };
 
   const handleFilterChange = (partial) => {
-    setFilters((f) => ({ ...f, ...partial }));
+    const next = { ...filters, ...partial };
+    setFilters(next);
+    const params = new URLSearchParams();
+    if (next.language && next.language !== 'All') params.set('language', next.language);
+    if (next.format) params.set('format', next.format);
+    if (next.minPrice > 0) params.set('minPrice', String(next.minPrice));
+    if (next.maxPrice < 5000) params.set('maxPrice', String(next.maxPrice));
+    if (next.sortBy && next.sortBy !== 'relevance') params.set('sortBy', next.sortBy);
+    navigate(`${ROUTES.CATALOGUE}?${params.toString()}`);
   };
 
   return (
@@ -145,7 +149,7 @@ function HomePage() {
             onChange={(v) => {
               if (v.trim()) navigate(`${ROUTES.CATALOGUE}?search=${encodeURIComponent(v.trim())}`);
             }}
-            placeholder="Search you want to read here"
+            placeholder="Search what you want to read"
             sx={{ maxWidth: 320, flex: '1 1 200px' }}
           />
           <FilterBar filters={filters} onChange={handleFilterChange} />
@@ -168,7 +172,6 @@ function HomePage() {
         {!isMobile && (
           <Box flexShrink={0}>
             <GenreSidebar
-              selected={selectedGenre}
               onSelect={handleGenreSelect}
             />
           </Box>

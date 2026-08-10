@@ -2,13 +2,11 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert,
   Avatar,
   Box,
   Button,
   CircularProgress,
   Divider,
-  Skeleton,
   Stack,
   Typography,
 } from '@mui/material';
@@ -23,15 +21,16 @@ import EmptyState from '../../common/components/EmptyState/EmptyState';
 import BookCard from '../../common/components/BookCard/BookCard';
 import AppPagination from '../../common/components/Pagination/AppPagination';
 import { useAuth } from '../../common/hooks/useAuth';
+import { useToast } from '../../common/context/ToastContext';
 
 function AuthorProfilePage() {
   const { authorId } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const toast = useToast();
   const queryClient = useQueryClient();
 
   const [page, setPage] = useState(0);
-  const [followMsg, setFollowMsg] = useState(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [...QUERY_KEYS.AUTHOR(authorId), page],
@@ -48,12 +47,11 @@ function AuthorProfilePage() {
     mutationFn: () => authorApi.followAuthor(authorId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHOR(authorId) });
-      setFollowMsg({ type: 'success', text: 'Author followed!' });
-      setTimeout(() => setFollowMsg(null), 3000);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FOLLOWED_AUTHORS });
+      toast.success('Author followed! You\'ll see their books in My Writers.');
     },
     onError: (err) => {
-      setFollowMsg({ type: 'error', text: err.response?.data?.message || 'Failed to follow.' });
-      setTimeout(() => setFollowMsg(null), 3000);
+      toast.error(err.response?.data?.message || 'Failed to follow author.');
     },
   });
 
@@ -61,12 +59,11 @@ function AuthorProfilePage() {
     mutationFn: () => authorApi.unfollowAuthor(authorId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.AUTHOR(authorId) });
-      setFollowMsg({ type: 'info', text: 'Author unfollowed.' });
-      setTimeout(() => setFollowMsg(null), 3000);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.FOLLOWED_AUTHORS });
+      toast.info('Author unfollowed.');
     },
     onError: (err) => {
-      setFollowMsg({ type: 'error', text: err.response?.data?.message || 'Failed to unfollow.' });
-      setTimeout(() => setFollowMsg(null), 3000);
+      toast.error(err.response?.data?.message || 'Failed to unfollow author.');
     },
   });
 
@@ -116,12 +113,6 @@ function AuthorProfilePage() {
           <Typography variant="body1" color="text.secondary" mb={2} sx={{ maxWidth: 700 }}>
             {author.biography}
           </Typography>
-
-          {followMsg && (
-            <Alert severity={followMsg.type} sx={{ mb: 1.5, maxWidth: 400 }} onClose={() => setFollowMsg(null)}>
-              {followMsg.text}
-            </Alert>
-          )}
 
           <Button
             variant={isFollowed ? 'outlined' : 'contained'}

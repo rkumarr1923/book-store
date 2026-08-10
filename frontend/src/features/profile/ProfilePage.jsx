@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Alert,
   Box,
   Button,
   Checkbox,
@@ -13,7 +12,6 @@ import {
   Divider,
   FormControlLabel,
   IconButton,
-  Snackbar,
   Stack,
   Tab,
   Tabs,
@@ -29,6 +27,7 @@ import StarIcon from '@mui/icons-material/Star';
 
 import { userApi } from '../../common/api/userApi';
 import { useAuth } from '../../common/hooks/useAuth';
+import { useToast } from '../../common/context/ToastContext';
 import LoadingSpinner from '../../common/components/LoadingSpinner/LoadingSpinner';
 import ErrorMessage from '../../common/components/ErrorMessage/ErrorMessage';
 
@@ -112,9 +111,9 @@ function AddressDialog({ open, onClose, initial, onSave, saving }) {
 
 function AddressesTab() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
-  const [snack, setSnack] = useState(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['addresses'],
@@ -128,9 +127,9 @@ function AddressesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['addresses'] });
       setDialogOpen(false);
-      setSnack({ type: 'success', msg: 'Address added.' });
+      toast.success('Address added successfully.');
     },
-    onError: (err) => setSnack({ type: 'error', msg: err.response?.data?.message || 'Failed to add address.' }),
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to add address.'),
   });
 
   const updateMutation = useMutation({
@@ -138,26 +137,27 @@ function AddressesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['addresses'] });
       setDialogOpen(false);
-      setSnack({ type: 'success', msg: 'Address updated.' });
+      toast.success('Address updated.');
     },
-    onError: (err) => setSnack({ type: 'error', msg: err.response?.data?.message || 'Failed to update.' }),
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to update address.'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id) => userApi.deleteAddress(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['addresses'] });
-      setSnack({ type: 'success', msg: 'Address deleted.' });
+      toast.info('Address deleted.');
     },
-    onError: (err) => setSnack({ type: 'error', msg: err.response?.data?.message || 'Failed to delete.' }),
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to delete address.'),
   });
 
   const defaultMutation = useMutation({
     mutationFn: (id) => userApi.setDefaultAddress(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['addresses'] });
-      setSnack({ type: 'success', msg: 'Default address updated.' });
+      toast.success('Default address updated.');
     },
+    onError: () => toast.error('Failed to update default address.'),
   });
 
   const handleSave = (form) => {
@@ -251,10 +251,6 @@ function AddressesTab() {
         onSave={handleSave}
         saving={isSaving}
       />
-
-      <Snackbar open={!!snack} autoHideDuration={3000} onClose={() => setSnack(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        {snack ? <Alert severity={snack.type} onClose={() => setSnack(null)} sx={{ width: '100%' }}>{snack.msg}</Alert> : <span />}
-      </Snackbar>
     </Box>
   );
 }
@@ -263,21 +259,21 @@ function AddressesTab() {
 
 function ProfileTab() {
   const { user, refreshUser } = useAuth();
+  const toast = useToast();
   const [form, setForm] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
     phoneNumber: user?.phoneNumber || '',
   });
   const [errors, setErrors] = useState({});
-  const [snack, setSnack] = useState(null);
 
   const mutation = useMutation({
     mutationFn: (payload) => userApi.updateMe(payload),
     onSuccess: async () => {
       await refreshUser();
-      setSnack({ type: 'success', msg: 'Profile updated.' });
+      toast.success('Profile updated successfully.');
     },
-    onError: (err) => setSnack({ type: 'error', msg: err.response?.data?.message || 'Failed to update profile.' }),
+    onError: (err) => toast.error(err.response?.data?.message || 'Failed to update profile.'),
   });
 
   const set = (k) => (e) => { setForm((f) => ({ ...f, [k]: e.target.value })); setErrors((er) => ({ ...er, [k]: '' })); };
@@ -336,10 +332,6 @@ function ProfileTab() {
       >
         {mutation.isPending ? 'Saving…' : 'Save Changes'}
       </Button>
-
-      <Snackbar open={!!snack} autoHideDuration={3000} onClose={() => setSnack(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        {snack ? <Alert severity={snack.type} onClose={() => setSnack(null)} sx={{ width: '100%' }}>{snack.msg}</Alert> : <span />}
-      </Snackbar>
     </Box>
   );
 }

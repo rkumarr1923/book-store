@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
   Alert,
@@ -125,6 +125,18 @@ function PaymentModal({ open, onClose, order, onSuccess }) {
   const [upiId, setUpiId] = useState('');
   const [upiError, setUpiError] = useState('');
   const [apiError, setApiError] = useState('');
+
+  // Reset all form state every time the modal opens
+  useEffect(() => {
+    if (open) {
+      setMethod('CREDIT_CARD');
+      setCardForm(CARD_EMPTY);
+      setCardErrors({});
+      setUpiId('');
+      setUpiError('');
+      setApiError('');
+    }
+  }, [open]);
 
   const amount = order?.totalAmount || 0;
 
