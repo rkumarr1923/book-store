@@ -8,8 +8,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -41,17 +39,6 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     /** Calculate the average star rating for a book. Returns null if no reviews exist. */
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.book.id = :bookId")
     Double findAverageRatingByBookId(@Param("bookId") Long bookId);
-
-    /**
-     * Batch-calculate average ratings for a set of book IDs in a single query.
-     * Returns one {@code Object[]} row per book that has at least one review,
-     * where {@code row[0]} is the book ID ({@code Long}) and {@code row[1]} is
-     * the average rating ({@code Double}).
-     * Books with no reviews are absent from the result — callers should default
-     * those to {@code null}.
-     */
-    @Query("SELECT r.book.id, AVG(r.rating) FROM Review r WHERE r.book.id IN :bookIds GROUP BY r.book.id")
-    List<Object[]> findAverageRatingsByBookIds(@Param("bookIds") Collection<Long> bookIds);
 
     /** Count the total number of reviews for a book. */
     long countByBookId(Long bookId);

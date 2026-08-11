@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Drawer,
+  Fab,
   IconButton,
   Typography,
   useMediaQuery,
@@ -26,50 +27,32 @@ import BookGrid from './BookGrid';
 
 const PAGE_SIZE = 20;
 
-/**
- * Read the initial catalogue state out of the URL search params.
- * Called once on mount so state is immediately consistent with the URL.
- */
-function readStateFromParams(searchParams) {
-  const rawSlug = searchParams.get('genreSlug') || '';
-  return {
-    search: searchParams.get('search') || '',
-    filters: {
-      genreSlug: rawSlug.toLowerCase() === 'all' ? '' : rawSlug,
-      language: searchParams.get('language') || 'All',
-      format: searchParams.get('format') || '',
-      minPrice: Number(searchParams.get('minPrice')) || 0,
-      maxPrice: Number(searchParams.get('maxPrice')) || 5000,
-      sortBy: searchParams.get('sortBy') || 'relevance',
-    },
-    page: Number(searchParams.get('page')) || 0,
-  };
-}
-
 function CataloguePage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // ─── Initialise state from URL once on mount ──────────────────────────
-  // React Router re-mounts this component on navigation, so the initial
-  // URL is always correctly reflected.  We do NOT sync URL→state after
-  // mount; only state→URL, which avoids the duplicate-request loop caused
-  // by setSearchParams triggering a new searchParams object reference.
-  const initial = useMemo(() => readStateFromParams(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const [search, setSearch] = useState(initial.search);
-  const [filters, setFilters] = useState(initial.filters);
-  const [page, setPage] = useState(initial.page);
-
-  // ─── Fetch genres (needed to resolve name from slug) ─────────────────
+  // ─── Fetch genres (needed to resolve name from slug) ─────────────
   const { data: genreData } = useQuery({
     queryKey: QUERY_KEYS.GENRES,
     queryFn: genreApi.getAllGenres,
     staleTime: 1000 * 60 * 10,
   });
   const allGenres = useMemo(() => genreData?.data || [], [genreData]);
+
+  // ─── State derived from URL params ──────────────────────────────
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [filters, setFilters] = useState({
+    genreSlug: (searchParams.get('genreSlug') || '').toLowerCase() === 'all' ? '' : (searchParams.get('genreSlug') || ''),
+    language: searchParams.get('language') || 'All',
+    format: searchParams.get('format') || '',
+    minPrice: Number(searchParams.get('minPrice')) || 0,
+    maxPrice: Number(searchParams.get('maxPrice')) || 5000,
+    sortBy: searchParams.get('sortBy') || 'relevance',
+  });
+  const [page, setPage] = useState(Number(searchParams.get('page')) || 0);
 
   // Derive the active genre name from the slug for sidebar highlighting
   const selectedGenre = useMemo(() => {
@@ -81,10 +64,30 @@ function CataloguePage() {
 
   const debouncedSearch = useDebounce(search, 500);
 
-  // ─── Sync state → URL (one-way only) ─────────────────────────────────
-  // This is the only place that writes to the URL.  It uses replace:true
-  // so the browser history entry is updated in-place rather than pushed,
-  // preserving the ability to navigate back to the page that linked here.
+  // Track whether the URL was changed by us (state→URL) or by an external navigation
+  const selfUpdatingRef = useRef(false);
+
+  // Sync URL → state only when navigating from another page (not from our own setSearchParams)
+  useEffect(() => {
+    if (selfUpdatingRef.current) {
+      selfUpdatingRef.current = false;
+      return;
+    }
+    const sp = searchParams;
+    setSearch(sp.get('search') || '');
+    const rawSlug = sp.get('genreSlug') || '';
+    setFilters({
+      genreSlug: rawSlug.toLowerCase() === 'all' ? '' : rawSlug,
+      language: sp.get('language') || 'All',
+      format: sp.get('format') || '',
+      minPrice: Number(sp.get('minPrice')) || 0,
+      maxPrice: Number(sp.get('maxPrice')) || 5000,
+      sortBy: sp.get('sortBy') || 'relevance',
+    });
+    setPage(Number(sp.get('page')) || 0);
+  }, [searchParams]);
+
+  // Sync state → URL
   useEffect(() => {
     const params = {};
     if (debouncedSearch) params.search = debouncedSearch;
@@ -95,13 +98,12 @@ function CataloguePage() {
     if (filters.maxPrice < 5000) params.maxPrice = String(filters.maxPrice);
     if (filters.sortBy && filters.sortBy !== 'relevance') params.sortBy = filters.sortBy;
     if (page > 0) params.page = String(page);
+    selfUpdatingRef.current = true;
     setSearchParams(params, { replace: true });
-  }, [debouncedSearch, filters, page, setSearchParams]);
+  }, [debouncedSearch, filters, page]);
 
-  // ─── Build API query params ───────────────────────────────────────────
-  // Stable object used as React Query key; only changes when actual filter
-  // values change, preventing spurious cache-key mismatches.
-  const apiParams = useMemo(() => ({
+  // Build API query params
+  const apiParams = {
     page,
     size: PAGE_SIZE,
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
@@ -111,7 +113,7 @@ function CataloguePage() {
     ...(filters.minPrice > 0 ? { minPrice: filters.minPrice } : {}),
     ...(filters.maxPrice < 5000 ? { maxPrice: filters.maxPrice } : {}),
     ...(filters.sortBy ? { sortBy: filters.sortBy } : {}),
-  }), [debouncedSearch, filters, page]);
+  };
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [...QUERY_KEYS.BOOKS, apiParams],
