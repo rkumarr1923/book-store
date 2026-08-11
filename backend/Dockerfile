@@ -54,7 +54,7 @@ EXPOSE ${PORT}
 ENTRYPOINT ["sh", "-c", \
   "exec java \
     -XX:+UseContainerSupport \
-    -XX:MaxRAMPercentage=75.0 \
+    -XX:MaxRAMPercentage=40.0 \
     -Dserver.port=${PORT} \
     -Dserver.address=0.0.0.0 \
     -jar /app/app.jar"]
