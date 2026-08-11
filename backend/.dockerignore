@@ -1,0 +1,8 @@
+# Never copy secrets, local overrides, or build artefacts into the Docker image
+.env
+.env.*
+target/
+*.log
+.git/
+.gitignore
+README.md
