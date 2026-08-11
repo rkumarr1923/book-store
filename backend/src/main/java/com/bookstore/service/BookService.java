@@ -25,9 +25,12 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -47,6 +50,9 @@ public class BookService {
 
     /**
      * Return a paginated, filtered, and searchable list of active books.
+     *
+     * Ratings are resolved in a single batch query for all books on the current
+     * page, replacing the previous per-book N+1 pattern.
      */
     @Transactional(readOnly = true)
     public PagedResponse<BookSummaryResponse> findAll(
@@ -87,9 +93,15 @@ public class BookService {
             bookPage = bookRepository.findByIsActiveTrue(pageable);
         }
 
+        // One batch query for all ratings on this page — replaces N per-book queries
+        List<Long> bookIds = bookPage.getContent().stream()
+                .map(Book::getId)
+                .collect(Collectors.toList());
+        Map<Long, Double> ratingMap = batchFetchRatings(bookIds);
+
         List<BookSummaryResponse> content = bookPage.getContent()
                 .stream()
-                .map(this::toSummaryWithComputedFields)
+                .map(b -> toSummaryWithComputedFields(b, ratingMap.get(b.getId())))
                 .collect(Collectors.toList());
 
         return PagedResponse.<BookSummaryResponse>builder()
@@ -106,6 +118,7 @@ public class BookService {
 
     /**
      * Return the full detail for a single active book.
+     * Uses the single-book rating query — correct for a one-off lookup.
      */
     @Transactional(readOnly = true)
     public BookDetailResponse findById(Long bookId) {
@@ -114,7 +127,7 @@ public class BookService {
 
         BookDetailResponse response = bookMapper.toDetailResponse(book);
 
-        Double avgRating  = reviewRepository.findAverageRatingByBookId(bookId);
+        Double avgRating   = reviewRepository.findAverageRatingByBookId(bookId);
         long   reviewCount = reviewRepository.countByBookId(bookId);
         LocalDate delivery = deliveryDateCalculator.calculate();
 
@@ -142,6 +155,7 @@ public class BookService {
 
     /**
      * Return books related to the specified book by shared genres.
+     * Ratings are batch-fetched for all related books in one query.
      */
     @Transactional(readOnly = true)
     public List<BookSummaryResponse> findRelated(Long bookId, int limit) {
@@ -176,21 +190,37 @@ public class BookService {
             }
         }
 
+        // One batch query for all related-book ratings
+        List<Long> relatedIds = related.stream()
+                .map(Book::getId)
+                .collect(Collectors.toList());
+        Map<Long, Double> ratingMap = batchFetchRatings(relatedIds);
+
         return related.stream()
                 .limit(limit)
-                .map(this::toSummaryWithComputedFields)
+                .map(b -> toSummaryWithComputedFields(b, ratingMap.get(b.getId())))
                 .collect(Collectors.toList());
     }
 
     // ── Package-level helpers (used by HomeService) ────────────────────────────
 
     /**
-     * Map a book to summary DTO and set runtime-computed fields.
+     * Map a single book to its summary DTO, fetching its rating individually.
+     * Used by HomeService via {@code bookService::toSummaryWithComputedFields}.
+     * For list contexts prefer the batch overload to avoid N+1.
      */
     public BookSummaryResponse toSummaryWithComputedFields(Book book) {
+        Double avgRating = reviewRepository.findAverageRatingByBookId(book.getId());
+        return toSummaryWithComputedFields(book, avgRating);
+    }
+
+    /**
+     * Map a book to its summary DTO with a pre-fetched average rating.
+     * Pass {@code null} for {@code averageRating} when the book has no reviews.
+     */
+    public BookSummaryResponse toSummaryWithComputedFields(Book book, Double averageRating) {
         BookSummaryResponse base = bookMapper.toSummaryResponse(book);
         String shortDesc = truncate(book.getDescription(), 120);
-        Double avgRating = reviewRepository.findAverageRatingByBookId(book.getId());
         LocalDate delivery = deliveryDateCalculator.calculate();
 
         return BookSummaryResponse.builder()
@@ -203,12 +233,31 @@ public class BookService {
                 .genres(base.getGenres())
                 .price(base.getPrice())
                 .estimatedDeliveryDate(delivery)
-                .averageRating(avgRating)
+                .averageRating(averageRating)
                 .copiesSold(base.getCopiesSold())
                 .build();
     }
 
     // ── Private Helpers ────────────────────────────────────────────────────────
+
+    /**
+     * Fetch average ratings for a list of book IDs in a single GROUP BY query.
+     * Returns an empty map when the list is empty (avoids a vacuous SQL IN ()).
+     * Books absent from the result have no reviews; callers treat them as null.
+     */
+    Map<Long, Double> batchFetchRatings(List<Long> bookIds) {
+        if (bookIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<Object[]> rows = reviewRepository.findAverageRatingsByBookIds(bookIds);
+        Map<Long, Double> map = new HashMap<>(rows.size() * 2);
+        for (Object[] row : rows) {
+            Long   id     = ((Number) row[0]).longValue();
+            Double rating = row[1] != null ? ((Number) row[1]).doubleValue() : null;
+            map.put(id, rating);
+        }
+        return map;
+    }
 
     private Sort resolveSort(String sortBy) {
         if (sortBy == null) return Sort.by(Sort.Direction.DESC, "createdAt");
