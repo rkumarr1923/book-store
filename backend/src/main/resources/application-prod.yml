@@ -46,6 +46,10 @@ logging:
     org.springframework.web: WARN
     org.springframework.security: WARN
     org.hibernate.SQL: OFF
+    # ── Startup instrumentation (temporary — remove after diagnosis) ──────────
+    com.zaxxer.hikari: DEBUG
+    org.hibernate.engine.jdbc.env: DEBUG
+    org.springframework.boot.web.embedded.tomcat: INFO
 
 # ── Application ───────────────────────────────────────────────────────────────
 app:
