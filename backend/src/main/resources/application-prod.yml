@@ -1,5 +1,8 @@
 spring:
   # ── DataSource (production — values must be supplied via environment variables) ─
+  # DB_URL must be a full JDBC URL, e.g.:
+  #   jdbc:postgresql://<host>/neondb?sslmode=require&channel_binding=require
+  # DB_USERNAME and DB_PASSWORD must be set on the deployment platform as secrets.
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -7,12 +10,26 @@ spring:
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
+      # Neon serverless PostgreSQL may close idle connections — keep-alive prevents stale sockets
+      keepalive-time: 30000
+      connection-test-query: SELECT 1
 
   # ── JPA ────────────────────────────────────────────────────────────────────
   jpa:
     hibernate:
       ddl-auto: validate
     show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          lob:
+            non_contextual_creation: true
+
+  # ── SQL initialisation — DISABLED in production ────────────────────────────
+  # data.sql is a dev seed file; it must never run against the production database.
+  sql:
+    init:
+      mode: never
 
 # ── Springdoc (disable Swagger in production) ─────────────────────────────────
 springdoc:
