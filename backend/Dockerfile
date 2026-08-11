@@ -50,5 +50,5 @@ EXPOSE ${PORT}
 #   -Dserver.port=${PORT}       — honour Render's injected PORT variable
 #   -Dserver.address=0.0.0.0    — bind on all interfaces, not just loopback
 #   -XX:+UseContainerSupport    — respect container CPU/memory cgroup limits
-#   -Xms64m -Xmx192m            — explicit heap bounds for 512 MB Render free tier
-ENTRYPOINT ["sh", "-c", "exec java -XX:+UseContainerSupport -Xms64m -Xmx192m -Dserver.port=${PORT} -Dserver.address=0.0.0.0 -jar /app/app.jar"]
+#   -Xms128m -Xmx256m           — explicit heap bounds for 512 MB Render free tier
+ENTRYPOINT ["sh", "-c", "exec java -XX:+UseContainerSupport -Xms128m -Xmx256m -Dserver.port=${PORT} -Dserver.address=0.0.0.0 -jar /app/app.jar"]
