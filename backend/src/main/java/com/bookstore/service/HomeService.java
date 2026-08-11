@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -24,7 +23,7 @@ import java.util.stream.Collectors;
 public class HomeService {
 
     private final BookRepository bookRepository;
-    private final BookService    bookService;   // reuses computed-fields mapping + batch rating helper
+    private final BookService    bookService;   // reuses computed-fields mapping
 
     // ── Full home page ─────────────────────────────────────────────────────────
 
@@ -104,22 +103,10 @@ public class HomeService {
 
     // ── Private Helpers ────────────────────────────────────────────────────────
 
-    /**
-     * Map a list of books to summary DTOs using a single batch rating query.
-     * Previously called {@code bookService::toSummaryWithComputedFields} per book
-     * (N+1 pattern). Now fetches all ratings in one round-trip via
-     * {@link BookService#batchFetchRatings}.
-     */
     private List<BookSummaryResponse> mapToSummaries(List<Book> books, int limit) {
-        List<Book> bounded = books.stream().limit(limit).collect(Collectors.toList());
-        if (bounded.isEmpty()) {
-            return List.of();
-        }
-        List<Long> ids = bounded.stream().map(Book::getId).collect(Collectors.toList());
-        Map<Long, Double> ratingMap = bookService.batchFetchRatings(ids);
-
-        return bounded.stream()
-                .map(b -> bookService.toSummaryWithComputedFields(b, ratingMap.get(b.getId())))
+        return books.stream()
+                .limit(limit)
+                .map(bookService::toSummaryWithComputedFields)
                 .collect(Collectors.toList());
     }
 }
