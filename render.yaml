@@ -1,0 +1,28 @@
+# Render deployment configuration for Book Store Backend
+# Reference: https://render.com/docs/render-yaml
+
+services:
+  - type: web
+    name: book-store-backend
+    runtime: java
+    rootDir: backend
+    buildCommand: "./mvnw clean package -DskipTests"
+    startCommand: "java -Dserver.port=$PORT -jar target/book-store-backend-1.0.0-SNAPSHOT.jar"
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DB_URL
+        sync: false          # Set in Render dashboard
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true  # Render will auto-generate
+      - key: JWT_EXPIRATION_MS
+        value: "86400000"
+      - key: DELIVERY_OFFSET_DAYS
+        value: "7"
+      - key: TAX_RATE
+        value: "0.12"

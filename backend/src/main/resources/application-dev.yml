@@ -1,0 +1,52 @@
+spring:
+  # ── DataSource (local dev — PostgreSQL) ────────────────────────────────────
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/bookstore}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres123}
+
+  # ── JPA ────────────────────────────────────────────────────────────────────
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    defer-datasource-initialization: true   # load data.sql AFTER Hibernate creates tables
+    properties:
+      hibernate:
+        format_sql: true
+
+  # ── data.sql seed (runs after Hibernate schema creation) ──────────────────
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:data.sql
+
+  # ── Mail — Mailtrap sandbox (dev only) ────────────────────────────────────
+  mail:
+    host: sandbox.smtp.mailtrap.io
+    port: 2525
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+
+# ── Springdoc ─────────────────────────────────────────────────────────────────
+springdoc:
+  swagger-ui:
+    enabled: true
+  api-docs:
+    enabled: true
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging:
+  level:
+    root: INFO
+    com.bookstore: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
+
+# ── Application ───────────────────────────────────────────────────────────────
+app:
+  jwt:
+    secret: dev-secret-key-do-not-use-in-production-at-all
+    expiration-ms: 86400000

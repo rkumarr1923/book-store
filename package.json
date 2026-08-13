@@ -1,0 +1,11 @@
+{
+  "name": "book-store",
+  "private": true,
+  "version": "1.0.0",
+  "description": "BookStore monorepo — tooling scripts",
+  "scripts": {
+    "validate-seed": "node scripts/validate-seed.js",
+    "validate-seed:fail-fast": "node scripts/validate-seed.js --fail-fast",
+    "validate-seed:verbose": "node scripts/validate-seed.js --concurrency 4"
+  }
+}
